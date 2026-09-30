@@ -1,1 +1,114 @@
-from laplace import compute
+import numpy as np
+from laplace_only import compute
+
+domaine, potentiel = compute('laby.jpg', 'out')
+
+dx = 1
+dy = 1
+dt = 0.1
+
+# Initialisation des matrices de vitesse #
+u = np.zeros_like(potentiel)
+v = np.zeros_like(potentiel)
+
+# Différence arrière selon x
+for i in range(potentiel.shape[0]):
+    for j in range(1, potentiel.shape[1]): # 1, car on ne peut pas calculer la différence arrière pour j=0 #
+        u[i, j] = (potentiel[i, j] - potentiel[i, j-1]) / dx
+
+# Différence arrière selon y
+for i in range(1, potentiel.shape[0]): # 1, car on ne peut pas calculer la différence arrière pour i=0 #
+    for j in range(potentiel.shape[1]):
+        v[i, j] = (potentiel[i, j] - potentiel[i-1, j]) / dy
+
+# Fonction pour vérifier la divergence nulle du champ de vitesse
+def verification_divergence(u, v, dx, dy):
+
+    divergence = np.zeros_like(u)
+
+    for i in range(1, u.shape[0]):
+        for j in range(1, u.shape[1]):
+
+            du_dx = (u[i, j] - u[i, j-1]) / dx
+            dv_dy = (v[i, j] - v[i-1, j]) / dy
+
+            divergence[i, j] = du_dx + dv_dy
+
+    print("Divergence maximale :", np.max(np.abs(divergence)))
+
+verification_divergence(u, v, dx, dy)
+
+# Initialisation de la matrice concentration #
+c = np.zeros_like(potentiel)
+
+# Initialisation de la matrice de la dérivée temporelle de la concentration #
+dc_dt = np.zeros_like(c)
+
+# Localisation de l'entrée du labyrinthe #
+entree = np.where(domaine[1, :] == 2)
+
+# Rmplissage de la matrice c avec la valeur 1 à l'entrée du labyrinthe #
+c[0, entree[0]] = 1
+
+
+# Parcours de toutes les cellules du domaine
+for i in range(1, potentiel.shape[0] - 1):
+    for j in range(1, potentiel.shape[1] - 1):
+
+        # Vitesses sur les quatre faces
+        u_gauche = u[i, j]
+        u_droite = u[i, j+1]
+        v_haut = v[i, j]
+        v_bas = v[i+1, j]
+
+        # Face droite
+        if domaine[i, j+1] == 0:
+            flux_droite = 0
+        else:
+            if u_droite >= 0:
+                c_droite = c[i, j]
+            else:
+                c_droite = c[i, j+1]
+
+            flux_droite = u_droite * c_droite
+
+        # Face gauche
+        if domaine[i, j-1] == 0:
+            flux_gauche = 0
+        else:
+            if u_gauche >= 0:
+                c_gauche = c[i, j-1]
+            else:
+                c_gauche = c[i, j]
+
+            flux_gauche = u_gauche * c_gauche
+
+        # Face haute
+        if domaine[i-1, j] == 0:
+            flux_haut = 0
+        else:
+            if v_haut >= 0:
+                c_haut = c[i-1, j]
+            else:
+                c_haut = c[i, j]
+
+            flux_haut = v_haut * c_haut
+
+        # Face basse
+        if domaine[i+1, j] == 0:
+            flux_bas = 0
+        else:
+            if v_bas >= 0:
+                c_bas = c[i, j]
+            else:
+                c_bas = c[i+1, j]
+
+            flux_bas = v_bas * c_bas
+
+        # Bilan des flux
+        dc_dt[i, j] = -(flux_droite - flux_gauche) / dx \
+                      -(flux_bas - flux_haut) / dy
+
+
+# Mise à jour de la concentration
+c = c + dt * dc_dt

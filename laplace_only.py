@@ -143,6 +143,9 @@ def compute(filepath:str, fileout:str = 'out'):
     np.savetxt(fileout+'_pot.txt', pot, fmt='%15.10f')
     np.save(fileout+'_pot.npy', pot)
 
+    return domain, pot
+
 if __name__ == "__main__":
 
     compute('laby.jpg', 'out')
+
