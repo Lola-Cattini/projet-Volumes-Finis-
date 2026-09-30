@@ -145,4 +145,4 @@ def compute(filepath:str, fileout:str = 'out'):
 
 if __name__ == "__main__":
 
-    compute('laby.png', 'out')
+    compute('laby.jpg', 'out')
