@@ -1,5 +1,6 @@
 import numpy as np
 from laplace_only import compute
+import matplotlib.pyplot as plt
 
 domaine, potentiel = compute('laby.jpg', 'out')
 
@@ -13,24 +14,42 @@ v = np.zeros_like(potentiel)
 
 # Différence arrière selon x
 for i in range(potentiel.shape[0]):
-    for j in range(1, potentiel.shape[1]): # 1, car on ne peut pas calculer la différence arrière pour j=0 #
-        u[i, j] = (potentiel[i, j] - potentiel[i, j-1]) / dx
+    for j in range(1, potentiel.shape[1]): # 1, car on ne peut pas calculer la différence arrière pour j=0
+        if domaine [i,j] == 1:
+            if domaine [i,j-1] == 0:
+                u[i, j] = 0 #condition limite
+            else :
+                u[i, j] = (potentiel[i, j] - potentiel[i, j-1]) / dx
+        else:
+            if domaine [i,j-1] == 1:
+                u[i, j] = 0 #condition limite
+            else:
+                u[i, j] = 0.
 
 # Différence arrière selon y
-for i in range(1, potentiel.shape[0]): # 1, car on ne peut pas calculer la différence arrière pour i=0 #
+for i in range(1, potentiel.shape[0]-1): # 1, car on ne peut pas calculer la différence arrière pour i=0 #
     for j in range(potentiel.shape[1]):
-        v[i, j] = (potentiel[i, j] - potentiel[i-1, j]) / dy
+        if domaine [i,j] == 1:
+            if domaine [i+1,j] == 0:
+                v[i, j] = 0  #condition limite
+            else:
+                v[i, j] = (potentiel[i, j] - potentiel[i+1, j]) / dy
+        else:
+            if domaine [i+1,j] == 1:
+                v[i, j] = 0  #condition limite
+            else:
+                v[i, j] = 0.
 
 # Fonction pour vérifier la divergence nulle du champ de vitesse
 def verification_divergence(u, v, dx, dy):
 
     divergence = np.zeros_like(u)
 
-    for i in range(1, u.shape[0]):
-        for j in range(1, u.shape[1]):
+    for i in range(1, u.shape[0]-1):
+        for j in range(1, u.shape[1]-1):
 
-            du_dx = (u[i, j] - u[i, j-1]) / dx
-            dv_dy = (v[i, j] - v[i-1, j]) / dy
+            du_dx = (u[i, j+1] - u[i, j]) / dx
+            dv_dy = (v[i-1, j] - v[i, j]) / dy
 
             divergence[i, j] = du_dx + dv_dy
 
@@ -112,3 +131,18 @@ for i in range(1, potentiel.shape[0] - 1):
 
 # Mise à jour de la concentration
 c = c + dt * dc_dt
+""""
+# Création d'une copie de c pour l'affichage
+c_affichage = np.ma.masked_where(domaine == 0, c)
+
+plt.figure(figsize=(8, 8))
+
+plt.imshow(c_affichage, origin='upper', cmap='viridis')
+
+plt.colorbar(label='Concentration')
+
+plt.title('Distribution de la concentration dans le labyrinthe')
+plt.xlabel('x')
+plt.ylabel('y')
+
+plt.show()"""
