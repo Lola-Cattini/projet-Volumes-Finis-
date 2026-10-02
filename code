@@ -15,7 +15,7 @@ v = np.zeros_like(potentiel)
 # Différence arrière selon x
 for i in range(potentiel.shape[0]):
     for j in range(1, potentiel.shape[1]): # 1, car on ne peut pas calculer la différence arrière pour j=0
-        if domaine [i,j] == 1:
+        if domaine [i,j] == 1 or domaine[i,j] == 2:
             if domaine [i,j-1] == 0:
                 u[i, j] = 0 #condition limite
             else :
@@ -29,7 +29,7 @@ for i in range(potentiel.shape[0]):
 # Différence arrière selon y
 for i in range(1, potentiel.shape[0]-1): # 1, car on ne peut pas calculer la différence arrière pour i=0 #
     for j in range(potentiel.shape[1]):
-        if domaine [i,j] == 1:
+        if domaine [i,j] == 1 or domaine[i,j] == 2:
             if domaine [i+1,j] == 0:
                 v[i, j] = 0  #condition limite
             else:
@@ -57,92 +57,135 @@ def verification_divergence(u, v, dx, dy):
 
 verification_divergence(u, v, dx, dy)
 
-# Initialisation de la matrice concentration #
+# Initialisation de la matrice concentration 
 c = np.zeros_like(potentiel)
 
-# Initialisation de la matrice de la dérivée temporelle de la concentration #
+# Initialisation de la matrice de la dérivée temporelle de la concentration
 dc_dt = np.zeros_like(c)
 
-# Localisation de l'entrée du labyrinthe #
+# Localisation de l'entrée du labyrinthe
 entree = np.where(domaine[1, :] == 2)
 
-# Rmplissage de la matrice c avec la valeur 1 à l'entrée du labyrinthe #
-c[0, entree[0]] = 1
+# Condition limite de c à l'entrée du labyrinthe
+c[1, entree[0]] = 1
 
 
-# Parcours de toutes les cellules du domaine
-for i in range(1, potentiel.shape[0] - 1):
-    for j in range(1, potentiel.shape[1] - 1):
+# 3. CALCUL DES FLUX AUX FACES
 
-        # Vitesses sur les quatre faces
-        u_gauche = u[i, j]
-        u_droite = u[i, j+1]
-        v_haut = v[i, j]
-        v_bas = v[i+1, j]
+def calcul_flux(c, u, v, domaine):
 
-        # Face droite
-        if domaine[i, j+1] == 0:
-            flux_droite = 0
-        else:
-            if u_droite >= 0:
-                c_droite = c[i, j]
+    flux_u = np.zeros_like(u, dtype=float)
+    flux_v = np.zeros_like(v, dtype=float)
+
+
+    # Flux à travers les faces verticales
+
+    for i in range(c.shape[0]):
+        for j in range(1, c.shape[1]):
+
+            # Ecoulement vers la droite
+            if u[i,j] > 0:
+                flux_u[i,j] = u[i,j] * c[i,j-1]
+
+            # Ecoulement vers la gauche ou nul
             else:
-                c_droite = c[i, j+1]
+                flux_u[i,j] = u[i,j] * c[i,j]
 
-            flux_droite = u_droite * c_droite
 
-        # Face gauche
-        if domaine[i, j-1] == 0:
-            flux_gauche = 0
-        else:
-            if u_gauche >= 0:
-                c_gauche = c[i, j-1]
+    # Flux à travers les faces horizontales
+
+    for i in range(c.shape[0] - 1):
+        for j in range(c.shape[1]):
+
+            # Ecoulement vers le bas
+            if v[i,j] > 0:
+                flux_v[i,j] = v[i,j] * c[i,j]
+
+            # Ecoulement vers le haut ou nul
             else:
-                c_gauche = c[i, j]
+                flux_v[i,j] = v[i,j] * c[i+1,j]
 
-            flux_gauche = u_gauche * c_gauche
-
-        # Face haute
-        if domaine[i-1, j] == 0:
-            flux_haut = 0
-        else:
-            if v_haut >= 0:
-                c_haut = c[i-1, j]
-            else:
-                c_haut = c[i, j]
-
-            flux_haut = v_haut * c_haut
-
-        # Face basse
-        if domaine[i+1, j] == 0:
-            flux_bas = 0
-        else:
-            if v_bas >= 0:
-                c_bas = c[i, j]
-            else:
-                c_bas = c[i+1, j]
-
-            flux_bas = v_bas * c_bas
-
-        # Bilan des flux
-        dc_dt[i, j] = -(flux_droite - flux_gauche) / dx \
-                      -(flux_bas - flux_haut) / dy
+    return flux_u, flux_v
 
 
-# Mise à jour de la concentration
-c = c + dt * dc_dt
-""""
-# Création d'une copie de c pour l'affichage
-c_affichage = np.ma.masked_where(domaine == 0, c)
+# 4. CALCUL DE dc/dt PAR BILAN DE FLUX
 
-plt.figure(figsize=(8, 8))
+def calcul_dc_dt(c, u, v, domaine, dx, dy):
 
-plt.imshow(c_affichage, origin='upper', cmap='viridis')
+    # Calcul de chaque flux une seule fois
+    flux_u, flux_v = calcul_flux(c, u, v, domaine)
 
-plt.colorbar(label='Concentration')
+    dc_dt = np.zeros_like(c, dtype=float)
 
-plt.title('Distribution de la concentration dans le labyrinthe')
-plt.xlabel('x')
-plt.ylabel('y')
+    for i in range(1, c.shape[0] - 1):
+        for j in range(1, c.shape[1] - 1):
 
-plt.show()"""
+            # On calcule uniquement dans le domaine
+            if domaine[i,j] == 1 or domaine[i,j] == 2:
+
+                # Flux horizontal :
+                # droite - gauche
+                flux_x = (flux_u[i,j+1] - flux_u[i,j])
+
+                # Flux vertical :
+                # bas - haut
+                flux_y = (flux_v[i,j] - flux_v[i-1,j])
+
+                # Conservation de la concentration
+                dc_dt[i,j] = -(flux_x / dx + flux_y / dy)
+
+    return dc_dt
+
+# 5. EVOLUTION TEMPORELLE
+
+# Nombre total de pas de temps
+nombre_pas = 10000
+
+# Instants que l'on veut afficher
+instants_affichage = [0, 500, 1000]
+
+# Stockage des concentrations
+resultats_c = {}
+
+# On sauvegarde la concentration initiale
+resultats_c[0] = c.copy()
+
+# Evolution temporelle
+for n in range(1, nombre_pas + 1):
+
+    # Calcul de dc/dt
+    dc_dt = calcul_dc_dt(c, u, v, domaine, dx, dy)
+
+    # Euler explicite
+    c = c + dt * dc_dt
+
+    # Condition à l'entrée
+    c[1, entree[0]] = 1
+
+    # On sauvegarde les résultats aux instants voulus
+    if n in instants_affichage:
+        resultats_c[n] = c.copy()
+
+
+
+fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+
+for ax, n in zip(axes, instants_affichage):
+    c_affichage = resultats_c[n]
+    c_affichage = np.ma.masked_where(domaine == 0, c_affichage)
+
+    image = ax.imshow(
+        c_affichage,
+        origin='upper',
+        cmap='viridis',
+        vmin=0,
+        vmax=1
+    )
+
+    ax.set_title(f"t = {n * dt:.1f}")
+    ax.set_xlabel("x")
+    ax.set_ylabel("y")
+
+fig.colorbar(image, ax=axes, label="Concentration c")
+plt.tight_layout()
+plt.show()
