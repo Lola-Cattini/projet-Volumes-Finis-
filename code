@@ -19,7 +19,7 @@ for i in range(potentiel.shape[0]):
             if domaine [i,j-1] == 0:
                 u[i, j] = 0 #condition limite
             else :
-                u[i, j] = (potentiel[i, j] - potentiel[i, j-1]) / dx
+                u[i, j] = -(potentiel[i, j] - potentiel[i, j-1]) / dx
         else:
             if domaine [i,j-1] == 1:
                 u[i, j] = 0 #condition limite
@@ -27,7 +27,7 @@ for i in range(potentiel.shape[0]):
                 u[i, j] = 0.
 
 # Différence arrière selon y
-for i in range(1, potentiel.shape[0]-1): # 1, car on ne peut pas calculer la différence arrière pour i=0 #
+for i in range(0, potentiel.shape[0]-1): 
     for j in range(potentiel.shape[1]):
         if domaine [i,j] == 1 or domaine[i,j] == 2:
             if domaine [i+1,j] == 0:
@@ -39,19 +39,127 @@ for i in range(1, potentiel.shape[0]-1): # 1, car on ne peut pas calculer la dif
                 v[i, j] = 0  #condition limite
             else:
                 v[i, j] = 0.
+"""
+print ("Vitesse absolue max u : ", np.max(np.abs(u)))
+print ("Vitesse absolue max v :", np.max(np.abs(v)))
+
+# ============================================================
+# AFFICHAGE DES CHAMPS u ET v SÉPARÉMENT
+# ============================================================
+
+fig, axes = plt.subplots(1, 2, figsize=(16, 7))
+
+ny, nx = u.shape
+
+# Grille correspondant aux indices des cellules
+X, Y = np.meshgrid(
+    np.arange(nx),
+    np.arange(ny)
+)
+
+pas = 1
+
+
+# ============================================================
+# CHAMP u : u[i,j] sur la FACE GAUCHE de (i,j)
+# ============================================================
+
+Xu = X - 0.5
+Yu = Y
+
+axes[0].imshow(domaine,origin='upper', cmap='gray')
+
+axes[0].quiver(
+    Xu[::pas, ::pas],
+    Yu[::pas, ::pas],
+    u[::pas, ::pas],
+    np.zeros_like(u[::pas, ::pas]),
+    color='red',
+    angles='xy',
+    scale_units='xy',
+    scale=0.1,
+    width=0.004,
+    headwidth=5,
+    headlength=7
+)
+
+# ----------------------------
+# Quadrillage des cellules
+# ----------------------------
+axes[0].set_xticks(np.arange(-0.5, nx, 1), minor=True)
+axes[0].set_yticks(np.arange(-0.5, ny, 1), minor=True)
+axes[0].grid(
+    which='minor',
+    linestyle='-',
+    linewidth=0.5,
+    color='black',
+    alpha=0.5
+)
+
+axes[0].set_title("Champ u : vitesse sur la face gauche")
+axes[0].set_xlabel("x")
+axes[0].set_ylabel("y")
+
+
+# ============================================================
+# CHAMP v : v[i,j] sur la FACE BASSE de (i,j)
+# ============================================================
+
+Xv = X
+Yv = Y + 0.5
+
+axes[1].imshow(
+    domaine,
+    origin='upper',
+    cmap='gray'
+)
+
+axes[1].quiver(
+    Xv[::pas, ::pas],
+    Yv[::pas, ::pas],
+    np.zeros_like(v[::pas, ::pas]),
+    v[::pas, ::pas],
+    color='blue',
+    angles='xy',
+    scale_units='xy',
+    scale=0.1,
+    width=0.004,
+    headwidth=5,
+    headlength=7
+)
+
+# ----------------------------
+# Quadrillage des cellules
+# ----------------------------
+axes[1].set_xticks(np.arange(-0.5, nx, 1), minor=True)
+axes[1].set_yticks(np.arange(-0.5, ny, 1), minor=True)
+axes[1].grid(
+    which='minor',
+    linestyle='-',
+    linewidth=0.5,
+    color='black',
+    alpha=0.5
+)
+
+axes[1].set_title("Champ v : vitesse sur la face basse")
+axes[1].set_xlabel("x")
+axes[1].set_ylabel("y")
+
+plt.show()
+"""
 
 # Fonction pour vérifier la divergence nulle du champ de vitesse
 def verification_divergence(u, v, dx, dy):
 
     divergence = np.zeros_like(u)
 
-    for i in range(1, u.shape[0]-1):
+    for i in range(2, u.shape[0]-2):
         for j in range(1, u.shape[1]-1):
+                if domaine[i,j] != 0: 
 
-            du_dx = (u[i, j+1] - u[i, j]) / dx
-            dv_dy = (v[i-1, j] - v[i, j]) / dy
-
-            divergence[i, j] = du_dx + dv_dy
+                    du_dx = (u[i, j+1] - u[i, j]) / dx
+                    dv_dy = (v[i, j] - v[i-1, j]) / dy
+                    divergence[i, j] = du_dx + dv_dy
 
     print("Divergence maximale :", np.max(np.abs(divergence)))
 
@@ -112,7 +220,6 @@ def calcul_flux(c, u, v, domaine):
 
 def calcul_dc_dt(c, u, v, domaine, dx, dy):
 
-    # Calcul de chaque flux une seule fois
     flux_u, flux_v = calcul_flux(c, u, v, domaine)
 
     dc_dt = np.zeros_like(c, dtype=float)
@@ -120,7 +227,6 @@ def calcul_dc_dt(c, u, v, domaine, dx, dy):
     for i in range(1, c.shape[0] - 1):
         for j in range(1, c.shape[1] - 1):
 
-            # On calcule uniquement dans le domaine
             if domaine[i,j] == 1 or domaine[i,j] == 2:
 
                 # Flux horizontal :
@@ -138,19 +244,14 @@ def calcul_dc_dt(c, u, v, domaine, dx, dy):
 
 # 5. EVOLUTION TEMPORELLE
 
-# Nombre total de pas de temps
-nombre_pas = 10000
+nombre_pas = 500
 
-# Instants que l'on veut afficher
-instants_affichage = [0, 500, 1000]
+instants_affichage = [0, 100, 500]
 
-# Stockage des concentrations
 resultats_c = {}
 
-# On sauvegarde la concentration initiale
 resultats_c[0] = c.copy()
 
-# Evolution temporelle
 for n in range(1, nombre_pas + 1):
 
     # Calcul de dc/dt
@@ -187,5 +288,5 @@ for ax, n in zip(axes, instants_affichage):
     ax.set_ylabel("y")
 
 fig.colorbar(image, ax=axes, label="Concentration c")
-plt.tight_layout()
+
 plt.show()
