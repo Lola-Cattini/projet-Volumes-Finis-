@@ -147,5 +147,5 @@ def compute(filepath:str, fileout:str = 'out'):
 
 if __name__ == "__main__":
 
-    compute('laby.jpg', 'out')
+    compute('laby complexe.png', 'out')
 
