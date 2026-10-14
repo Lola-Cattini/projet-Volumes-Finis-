@@ -1,19 +1,34 @@
 import numpy as np
-from laplace_only import compute
-import matplotlib.pyplot as plt
-import numpy as np
 import matplotlib.pyplot as plt
 
 from laplace_only import compute
 from vitesses import calculer_vitesses, afficher_champs_vitesse
 from divergence import verification_divergence
-from transport import calcul_flux, calcul_dc_dt
+from transport import euler_explicite, afficher_concentrations
+
+
+# ============================================================
+# 1. CALCUL DU POTENTIEL
+# ============================================================
 
 domaine, potentiel = compute('laby complexe.png', 'out')
+
+
+# ============================================================
+# 2. PARAMÈTRES
+# ============================================================
 
 dx = 1
 dy = 1
 dt = 0.1
+
+nombre_pas = 100
+instants_affichage = [50, 100]
+
+
+# ============================================================
+# 3. CALCUL DES VITESSES
+# ============================================================
 
 u, v = calculer_vitesses(potentiel, domaine, dx, dy)
 
@@ -22,62 +37,21 @@ afficher_champs_vitesse(u, v, domaine)
 divergence = verification_divergence(u, v, domaine, dx, dy)
 
 
-# Initialisation de la matrice concentration 
-c = np.zeros_like(potentiel)
+# ============================================================
+# 4. INITIALISATION DE LA CONCENTRATION
+# ============================================================
 
-# Initialisation de la matrice de la dérivée temporelle de la concentration
-dc_dt = np.zeros_like(c)
+c = np.zeros_like(potentiel, dtype=float)
 
-# Localisation de l'entrée du labyrinthe
-entree = np.where(domaine[1, :] == 2)
+# ============================================================
+# 5. TRANSPORT : EULER EXPLICITE
+# ============================================================
 
-# Condition limite de c à l'entrée du labyrinthe
-c[1, entree[0]] = 1
-
-
-#EVOLUTION TEMPORELLE PAR EULER EXPLICITE
-
-nombre_pas = 100
-instants_affichage = [50, 100]
-resultats_c = {0: c.copy()}
-
-for n in range(1, nombre_pas + 1):
-
-    # Calcul de dc/dt
-    dc_dt = calcul_dc_dt(c, u, v, domaine, dx, dy)
-
-    # Euler explicite
-    c = c + dt * dc_dt
-
-    # Condition à l'entrée
-    c[1, entree[0]] = 1
-
-    # On sauvegarde les résultats aux instants voulus
-    if n in instants_affichage:
-        resultats_c[n] = c.copy()
+resultats_c = euler_explicite(c, u, v, domaine, dx, dy, dt, nombre_pas, instants_affichage)
 
 
+# ============================================================
+# 6. AFFICHAGE DES CONCENTRATIONS
+# ============================================================
 
-fig, axes = plt.subplots(1, 2, figsize=(15, 5))
-
-for ax, n in zip(axes, instants_affichage):
-    c_affichage = resultats_c[n]
-    c_affichage = np.ma.masked_where(domaine == 0, c_affichage)
-
-    image = ax.imshow(
-        c_affichage,
-        origin='upper',
-        cmap='viridis',
-        vmin=0,
-        vmax=1
-    )
-
-    ax.set_title(f"t = {n * dt:.1f}")
-    ax.set_xlabel("x")
-    ax.set_ylabel("y")
-
-fig.colorbar(image, ax=axes, label="Concentration c")
-
-plt.show()
-
-
+afficher_concentrations( resultats_c, domaine, dt, instants_affichage)
