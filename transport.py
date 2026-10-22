@@ -22,8 +22,7 @@ def calcul_flux(c, u, v, domaine):
                 # Ecoulement vers la gauche ou nul
                 else:
                     flux_u[i,j] = u[i,j] * c[i,j]
-            else:
-                flux_u[i,j] = 0
+
 
     # Flux à travers les faces horizontales
     for i in range(c.shape[0]):

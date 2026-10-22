@@ -4,6 +4,11 @@ from scipy.sparse import csc_array as csr
 from scipy.sparse.linalg import spsolve, gmres, cg, splu
 from tqdm import tqdm
 
+
+import numpy as np
+
+
+
 def laplace_pot(domain, outside_value = 0, inside_value = 1, pot_in = 1., pot_out = -1.):
     """
     Calcul d'un écoulement irrotationnel en potentiel de vitesse sur base d'une matrice de domaine
@@ -108,6 +113,58 @@ def laplace_pot(domain, outside_value = 0, inside_value = 1, pot_in = 1., pot_ou
 
     return new_dom, new_pot
 
+
+def compute_matrice(matrice, fileout="test_laplace"):
+    """
+    Calcule le potentiel de Laplace à partir d'une matrice NumPy.
+
+    0 = mur / extérieur du domaine
+    1 = chemin / intérieur du domaine
+
+    L'entrée doit se trouver sur la première ligne
+    et la sortie sur la dernière ligne.
+    """
+
+    # Copie pour éviter de modifier la matrice originale
+    matrice = np.array(matrice, dtype=np.int32, copy=True)
+
+    # Vérification simple de la matrice
+    if matrice.ndim != 2:
+        raise ValueError("La matrice doit être en 2 dimensions.")
+
+    if not np.all(np.isin(matrice, [0, 1])):
+        raise ValueError("La matrice doit contenir uniquement 0 et 1.")
+
+    # Calcul du potentiel
+    domaine, potentiel = laplace_pot(
+        matrice,
+        outside_value=0,
+        inside_value=1,
+        pot_in=100.,
+        pot_out=-100.
+    )
+
+    # Affichage du domaine et du potentiel
+    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+
+    axes[0].imshow(domaine, origin="upper", cmap="gray")
+    axes[0].set_title("Domaine de calcul")
+
+    image = axes[1].imshow(potentiel, origin="upper", cmap="coolwarm")
+    axes[1].set_title("Potentiel de vitesse")
+    fig.colorbar(image, ax=axes[1], label="Potentiel")
+
+    plt.tight_layout()
+    plt.show()
+
+    # Sauvegarde facultative des résultats
+    np.savetxt(fileout + "_domain.txt", domaine, fmt="%i")
+    np.savetxt(fileout + "_pot.txt", potentiel, fmt="%15.10f")
+    np.save(fileout + "_pot.npy", potentiel)
+
+    return domaine, potentiel
+
+
 def compute(filepath:str, fileout:str = 'out'):
     # Import du module PIL pour lire n'importe quelle image
     from PIL import Image
@@ -145,7 +202,23 @@ def compute(filepath:str, fileout:str = 'out'):
 
     return domain, pot
 
+
 if __name__ == "__main__":
 
-    compute('laby complexe.png', 'out')
+    # compute('laby complexe.png', 'out')
+
+    mini_labyrinthe = np.array([
+        [0, 0, 1, 0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 1, 1, 1, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 1, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 1, 1, 1, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0, 1, 0, 0, 0],
+        [0, 0, 0, 0, 0, 1, 1, 0, 0, 0],
+        [0, 0, 0, 0, 0, 1, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 1, 1, 1, 0, 0],
+        [0, 0, 0, 0, 0, 0, 0, 1, 0, 0],
+        [0, 0, 0, 0, 0, 0, 0, 1, 0, 0],
+    ], dtype=np.int32)
+
+    domaine, potentiel = compute_matrice(mini_labyrinthe)
 
