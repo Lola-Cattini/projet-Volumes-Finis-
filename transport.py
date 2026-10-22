@@ -70,7 +70,7 @@ def dc_dt_cst(c, u, v, domaine, dx, dy):
 
 
 def euler_explicite(c, u, v, domaine, dx, dy, dt, nombre_pas, instants_affichage):
-    resultats_c = {0: c.copy()}
+    resultats_c_euler = {0: c.copy()}
 
     for n in range(1, nombre_pas + 1):
 
@@ -79,17 +79,17 @@ def euler_explicite(c, u, v, domaine, dx, dy, dt, nombre_pas, instants_affichage
 
         # On sauvegarde les résultats aux instants voulus
         if n in instants_affichage:
-            resultats_c[n] = c.copy()
+            resultats_c_euler[n] = c.copy()
 
-    return resultats_c
+    return resultats_c_euler
 
 
-def afficher_concentrations(resultats_c, domaine, dt, instants_affichage):
+def afficher_concentrations_euler(resultats_c_euler, domaine, dt, instants_affichage):
 
     fig, axes = plt.subplots(1, 2, figsize=(15, 5))
 
     for ax, n in zip(axes, instants_affichage):
-        c_affichage = resultats_c[n]
+        c_affichage = resultats_c_euler[n]
         c_affichage = np.ma.masked_where(domaine == 0, c_affichage)
 
         image = ax.imshow(
@@ -109,16 +109,3 @@ def afficher_concentrations(resultats_c, domaine, dt, instants_affichage):
     plt.show()
 
 
-def runge_kutta (c, u, v, domaine, dx, dy, dt, nombre_pas, instants_affichage):
-    resultats_c = {0: c.copy()}
-
-    for n in range(1, nombre_pas + 1):
-
-        c_1 = c + dt * dc_dt_cst(c, u, v, domaine, dx, dy)
-        c_2 = c + dt * dc_dt_cst(c_1, u, v, domaine, dx, dy)
-        c_final = (c_1 + c_2)/2
-
-        if n in instants_affichage:
-                    resultats_c[n] = c_final.copy()
-
-    return resultats_c

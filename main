@@ -4,7 +4,8 @@ import matplotlib.pyplot as plt
 from laplace_only import compute
 from vitesses import calculer_vitesses, afficher_champs_vitesse
 from divergence import verification_divergence
-from transport import euler_explicite, afficher_concentrations
+from transport import euler_explicite, afficher_concentrations_euler
+from transport_linéaire import runge_kutta, afficher_concentrations_kutta
 
 
 # ============================================================
@@ -20,7 +21,10 @@ domaine, potentiel = compute('laby complexe.png', 'out')
 
 dx = 1
 dy = 1
-dt = 0.1
+Cr = 0.5
+u, v = calculer_vitesses(potentiel, domaine, dx, dy)
+vitesse_max = max(np.max(np.abs(u)), np.max(np.abs(v)))
+dt = Cr * dx / vitesse_max 
 
 nombre_pas = 100
 instants_affichage = [50, 100]
@@ -44,14 +48,19 @@ divergence = verification_divergence(u, v, domaine, dx, dy)
 c = np.zeros_like(potentiel, dtype=float)
 
 # ============================================================
-# 5. TRANSPORT : EULER EXPLICITE
+# 5. EULER EXPLICITE + RECONSTRUCTION CONSTANTE
 # ============================================================
 
-resultats_c = euler_explicite(c, u, v, domaine, dx, dy, dt, nombre_pas, instants_affichage)
+resultats_c_euler = euler_explicite(c, u, v, domaine, dx, dy, dt, nombre_pas, instants_affichage)
+afficher_concentrations_euler(resultats_c_euler, domaine, dt, instants_affichage)
 
 
 # ============================================================
-# 6. AFFICHAGE DES CONCENTRATIONS
+# 6. RUNGE-KUTTA + RECONSTRUCTION LINEAIRE
 # ============================================================
 
-afficher_concentrations( resultats_c, domaine, dt, instants_affichage)
+resultats_c_kutta = runge_kutta(c, u, v, domaine, dx, dy, dt, nombre_pas, instants_affichage)
+afficher_concentrations_kutta(resultats_c_kutta, domaine, dt, instants_affichage)
+
+
+
