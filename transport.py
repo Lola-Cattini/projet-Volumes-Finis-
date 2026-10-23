@@ -10,8 +10,8 @@ def calcul_flux(c, u, v, domaine):
 
 
     # Flux à travers les faces verticales
-    for i in range(c.shape[0]):
-        for j in range(c.shape[1]):
+    for i in range(1,c.shape[0]-1):
+        for j in range(1,c.shape[1]-1):
 
             if domaine[i,j] == 1 or domaine[i,j] == 2:
 
@@ -25,8 +25,8 @@ def calcul_flux(c, u, v, domaine):
 
 
     # Flux à travers les faces horizontales
-    for i in range(c.shape[0]):
-        for j in range(c.shape[1]):
+    for i in range(1,c.shape[0]-1):
+        for j in range(1,c.shape[1]-1):
 
             if domaine[i,j] == 1 or domaine[i,j] == 2:
 
@@ -52,7 +52,7 @@ def dc_dt_cst(c, u, v, domaine, dx, dy):
     dc_dt = np.zeros_like(c, dtype=float)
 
     for i in range(1, c.shape[0] - 1):
-        for j in range(1, c.shape[1] - 1):
+       for j in range(1, c.shape[1] - 1):
 
             if domaine[i,j] == 1 or domaine[i,j] == 2:
 
@@ -70,12 +70,13 @@ def dc_dt_cst(c, u, v, domaine, dx, dy):
 
 def euler_explicite(c, u, v, domaine, dx, dy, dt, nombre_pas, instants_affichage):
     resultats_c_euler = {0: c.copy()}
+    
 
     for n in range(1, nombre_pas + 1):
 
         # Euler explicite
         c = c + dt * dc_dt_cst(c, u, v, domaine, dx, dy)
-
+    
         # On sauvegarde les résultats aux instants voulus
         if n in instants_affichage:
             resultats_c_euler[n] = c.copy()

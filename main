@@ -20,7 +20,6 @@ print(mini_labyrinthe)
 #domaine, potentiel = compute('laby complexe.png', 'out')
 domaine, potentiel = compute_matrice(mini_labyrinthe)
 
-
 # ============================================================
 # 2. PARAMÈTRES
 # ============================================================
@@ -29,17 +28,27 @@ dx = 1
 dy = 1
 Cr = 1
 
-u = np.zeros_like(mini_labyrinthe)
-u [:,1]=1
-v = np.zeros_like(mini_labyrinthe)
-v [:,1]=1
-u, v = calculer_vitesses(potentiel, domaine, dx, dy)
+u = np.zeros_like(potentiel)
+u [:,2]=1
+u [0,:]=0
+u [-1,:]=0
+u [:,0]=0
+u [:,-1]=0
+print (u)
+v = np.zeros_like(potentiel)
+v [:,2]=1
+v [0,:]=0
+v [-1,:]=0
+v [:,0]=0
+v [:,-1]=0
+print (v)
+#u, v = calculer_vitesses(potentiel, domaine, dx, dy)
 vitesse_max = max(np.max(np.abs(u)), np.max(np.abs(v)))
 
 dt = Cr * dx / vitesse_max 
 
-nombre_pas = 100
-instants_affichage = [50, 100]
+nombre_pas = 10
+instants_affichage = [2, 4]
 
 
 # ============================================================

@@ -203,22 +203,4 @@ def compute(filepath:str, fileout:str = 'out'):
     return domain, pot
 
 
-if __name__ == "__main__":
-
-    # compute('laby complexe.png', 'out')
-
-    mini_labyrinthe = np.array([
-        [0, 0, 1, 0, 0, 0, 0, 0, 0, 0],
-        [0, 0, 1, 1, 1, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 1, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 1, 1, 1, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0, 1, 0, 0, 0],
-        [0, 0, 0, 0, 0, 1, 1, 0, 0, 0],
-        [0, 0, 0, 0, 0, 1, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0, 1, 1, 1, 0, 0],
-        [0, 0, 0, 0, 0, 0, 0, 1, 0, 0],
-        [0, 0, 0, 0, 0, 0, 0, 1, 0, 0],
-    ], dtype=np.int32)
-
-    domaine, potentiel = compute_matrice(mini_labyrinthe)
 
