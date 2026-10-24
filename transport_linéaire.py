@@ -18,34 +18,32 @@ def calcul_gradients_lineaires(c, domaine, dx, dy):
 
             # On calcule les gradients uniquement dans le fluide
             if domaine[i, j] == 0:
-                dc_dx[i, j] = 0
-                dc_dy[i, j] = 0
+                continue
 
             # ------------------------------------------------
             # Gradient selon x
             # ------------------------------------------------
+            
+            # CAS 2 : chemin horizontal
+            if domaine[i, j-1] == 0 and domaine[i, j] == 2:
+                c[i,j]= 1.0
 
-            if domaine [i,j-1] and domaine [i,j+1] != 0:
+            
+            if domaine [i,j-1] != 0 and domaine [i,j+1] != 0:
                 dc_dx[i, j] = (c[i, j+1] - c[i, j-1]) / (2 * dx)
 
-            if domaine [i,j-1] == 0:
-                dc_dx[i,j] = 0
-
-            if domaine[i,j+1] == 0:
-                dc_dx[i,j] = 0
 
             # ------------------------------------------------
             # Gradient selon y
             # ------------------------------------------------
 
-            if domaine [i-1,j] and domaine [i+1,j] != 0:
+            # CAS 1 : chemin vertical + général
+            #if domaine[i-1, j] == 0 and domaine[i, j] == 2:
+                #c_[i;j] = 1.0
+
+
+            if domaine [i-1,j] != 0 and domaine [i+1,j] != 0:
                 dc_dy[i, j] = (c[i+1, j] - c[i-1, j]) / (2 * dy)
-
-            if domaine [i-1,j] == 0:
-                dc_dy[i,j] = 0
-
-            if domaine [i+1,j] == 0:
-                dc_dy[i,j] = 0
 
     return dc_dx, dc_dy
 
@@ -67,17 +65,24 @@ def calcul_flux_lineaire(c, u, v, domaine, dx, dy):
     # Flux à travers les faces verticales
     # --------------------------------------------------------
 
-    for i in range(ny):
-        for j in range(1, nx):
+    for i in range(1,ny-1):
+        for j in range(1, nx-1):
+
+            if domaine [i,j-1] == 0 and domaine [i,j] == 2:
+                c_face = 1
+                flux_u[i, j] = u[i, j] * c_face
+                continue
 
             # Écoulement vers la droite
             if u[i, j] > 0:
-                c_face = (c[i, j-1]+ dc_dx[i, j-1] * dx / 2)
+
+                c_face = c[i, j-1] + dc_dx[i, j-1] * dx / 2
                 flux_u[i, j] = u[i, j] * c_face
 
             # Écoulement vers la gauche
             elif u[i, j] < 0:
-                c_face = (c[i, j]- dc_dx[i, j] * dx / 2)
+
+                c_face = c[i, j] - dc_dx[i, j] * dx / 2
                 flux_u[i, j] = u[i, j] * c_face
 
             else:
@@ -88,17 +93,25 @@ def calcul_flux_lineaire(c, u, v, domaine, dx, dy):
     # Flux à travers les faces horizontales
     # --------------------------------------------------------
 
-    for i in range(ny-1):
-        for j in range(1,nx):
+    for i in range(1,ny-1):
+        for j in range(1,nx-1):
 
-            # Écoulement vers la droite
+            # Cas 1 : chemin vertical + général
+            #if domaine [i-1,j] == 0 and domaine [i,j] == 2:
+                #c_face = 1
+                #flux_v[i, j] = u[i, j] * c_face
+                #continue
+
+            # Écoulement vers le bas
             if v[i, j] > 0:
-                c_face = (c[i, j-1]+ dc_dy[i, j-1] * dy / 2)
+            
+                c_face = c[i-1, j]+ dc_dy[i-1, j] * dy / 2
                 flux_v[i, j] = v[i, j] * c_face
 
-            # Écoulement vers la gauche
+            # Écoulement vers le haut
             elif v[i, j] < 0:
-                c_face = (c[i, j]- dc_dy[i, j] * dy / 2)
+            
+                c_face = c[i, j]- dc_dy[i, j] * dy / 2
                 flux_v[i, j] = v[i, j] * c_face
 
             else:
