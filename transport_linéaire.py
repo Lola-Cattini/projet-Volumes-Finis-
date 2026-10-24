@@ -23,12 +23,11 @@ def calcul_gradients_lineaires(c, domaine, dx, dy):
             # ------------------------------------------------
             # Gradient selon x
             # ------------------------------------------------
-            
+            """
             # CAS 2 : chemin horizontal
             if domaine[i, j-1] == 0 and domaine[i, j] == 2:
                 c[i,j]= 1.0
-
-            
+            """            
             if domaine [i,j-1] != 0 and domaine [i,j+1] != 0:
                 dc_dx[i, j] = (c[i, j+1] - c[i, j-1]) / (2 * dx)
 
@@ -38,8 +37,8 @@ def calcul_gradients_lineaires(c, domaine, dx, dy):
             # ------------------------------------------------
 
             # CAS 1 : chemin vertical + général
-            #if domaine[i-1, j] == 0 and domaine[i, j] == 2:
-                #c_[i;j] = 1.0
+            if domaine[i-1, j] == 0 and domaine[i, j] == 2:
+                c[i,j] = 1.0
 
 
             if domaine [i-1,j] != 0 and domaine [i+1,j] != 0:
@@ -67,12 +66,13 @@ def calcul_flux_lineaire(c, u, v, domaine, dx, dy):
 
     for i in range(1,ny-1):
         for j in range(1, nx-1):
-
+            """
+            # Cas 2 : chemin horizontal
             if domaine [i,j-1] == 0 and domaine [i,j] == 2:
                 c_face = 1
                 flux_u[i, j] = u[i, j] * c_face
                 continue
-
+            """
             # Écoulement vers la droite
             if u[i, j] > 0:
 
@@ -97,10 +97,10 @@ def calcul_flux_lineaire(c, u, v, domaine, dx, dy):
         for j in range(1,nx-1):
 
             # Cas 1 : chemin vertical + général
-            #if domaine [i-1,j] == 0 and domaine [i,j] == 2:
-                #c_face = 1
-                #flux_v[i, j] = u[i, j] * c_face
-                #continue
+            if domaine [i-1,j] == 0 and domaine [i,j] == 2:
+                c_face = 1
+                flux_v[i, j] = u[i, j] * c_face
+                continue
 
             # Écoulement vers le bas
             if v[i, j] > 0:
@@ -149,10 +149,10 @@ def runge_kutta (c, u, v, domaine, dx, dy, dt, nombre_pas, instants_affichage):
 
         c_1 = c + dt * dc_dt_lineaire(c, u, v, domaine, dx, dy)
         c_2 = c + dt * dc_dt_lineaire(c_1, u, v, domaine, dx, dy)
-        c_final = (c_1 + c_2)/2
+        c = (c_1 + c_2)/2
 
         if n in instants_affichage:
-            resultats_c_kutta[n] = c_final.copy()
+            resultats_c_kutta[n] = c.copy()
 
     return resultats_c_kutta
 

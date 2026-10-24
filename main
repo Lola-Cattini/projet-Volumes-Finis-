@@ -1,21 +1,25 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-#from laplace_only import compute
-from laplace_only import compute_matrice
+from laplace_only import compute
 from vitesses import calculer_vitesses, afficher_champs_vitesse
 from divergence import verification_divergence
 from transport import euler_explicite, afficher_concentrations_euler
 from transport_linéaire import runge_kutta, afficher_concentrations_kutta
 
+
 # ============================================================
-# 0. MATRICE DU LABYRINTHE
+# 1. CALCUL DU POTENTIEL
 # ============================================================
 
+"""
 # CAS 1 : CHEMIN VERTICAL
-# mini_labyrinthe = np.zeros((5, 5))
-# mini_labyrinthe[:, 1] = 1
+mini_labyrinthe = np.zeros((5, 5))
+mini_labyrinthe[:, 1] = 1
+domaine, potentiel = compute_matrice(mini_labyrinthe)
+"""
 
+"""
 # CAS 2 : CHEMIN HORIZONTAL
 mini_labyrinthe = np.zeros((5, 5))
 mini_labyrinthe[:, 1] = 1
@@ -31,16 +35,11 @@ domaine[2, 5] = 2  # Sortie à droite
 
 print("Domaine :")
 print(domaine)
-
-# ============================================================
-# 1. CALCUL DU POTENTIEL
-# ============================================================
+"""
 
 #Cas général
-#domaine, potentiel = compute('laby complexe.png', 'out')
+domaine, potentiel = compute('laby.jpg', 'out')
 
-# Cas 1 : chemin vertical
-# domaine, potentiel = compute_matrice(mini_labyrinthe)
 
 # ============================================================
 # 2. PARAMÈTRES
@@ -49,42 +48,34 @@ print(domaine)
 dx = 1
 dy = 1
 Cr = 1
-
-# CAS 1 : CHEMIN VERTICAL
-# u = np.zeros_like(domaine, dtype=float)
-# v = np.zeros_like(domaine, dtype=float)
-# v[1:6, 2] = 1
-
-# CAS 2 : CHEMIN HORIZONTAL
-u = np.zeros_like(domaine, dtype=float)
-v = np.zeros_like(domaine, dtype=float)
-u[2, 1:7] = 1
-
-print("Matrice u :")
-print(u)
-print("Matrice v :")
-print(v)
-
-# Cas général
-#u, v = calculer_vitesses(potentiel, domaine, dx, dy)
-
-vitesse_max = max(np.max(np.abs(u)), np.max(np.abs(v)))
-dt = Cr * dx / vitesse_max 
-nombre_pas = 5
-instants_affichage = [1, 5]
+nombre_pas = 100
+instants_affichage = [50, 100]
 
 
 # ============================================================
 # 3. CALCUL DES VITESSES
 # ============================================================
-'''
+"""
+# CAS 1 : CHEMIN VERTICAL
+u = np.zeros_like(domaine, dtype=float)
+v = np.zeros_like(domaine, dtype=float)
+v[1:6, 2] = 1
+"""
+
+"""
+# CAS 2 : CHEMIN HORIZONTAL
+u = np.zeros_like(domaine, dtype=float)
+v = np.zeros_like(domaine, dtype=float)
+u[2, 1:7] = 1
+"""
+
+# Cas général
 u, v = calculer_vitesses(potentiel, domaine, dx, dy)
-
 afficher_champs_vitesse(u, v, domaine)
-
 divergence = verification_divergence(u, v, domaine, dx, dy)
 
-'''
+vitesse_max = max(np.max(np.abs(u)), np.max(np.abs(v)))
+dt = Cr * dx / vitesse_max 
 
 
 # ============================================================
@@ -96,7 +87,7 @@ print("C'est l'affichage euler")
 afficher_concentrations_euler(resultats_c_euler, domaine, dt, instants_affichage)
 
 
-
+"""
 # ============================================================
 # 6. RUNGE-KUTTA + RECONSTRUCTION LINEAIRE
 # ============================================================
@@ -104,3 +95,4 @@ c = np.zeros_like(domaine, dtype=float)
 resultats_c_kutta = runge_kutta(c, u, v, domaine, dx, dy, dt, nombre_pas, instants_affichage)
 print("C'est l'affichage runge kutta")
 afficher_concentrations_kutta(resultats_c_kutta, domaine, dt, instants_affichage)
+"""
