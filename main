@@ -1,6 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-
+import time
 from laplace_only import compute
 from vitesses import calculer_vitesses, afficher_champs_vitesse
 from divergence import verification_divergence
@@ -48,8 +48,8 @@ domaine, potentiel = compute('laby.jpg', 'out')
 dx = 1
 dy = 1
 Cr = 1
-nombre_pas = 100
-instants_affichage = [50, 100]
+nombre_pas = 10000
+instants_affichage = [1000, 10000]
 
 
 # ============================================================
@@ -82,7 +82,12 @@ dt = Cr * dx / vitesse_max
 # 5. EULER EXPLICITE + RECONSTRUCTION CONSTANTE
 # ============================================================
 c = np.zeros_like(domaine, dtype=float)
+debut = time.perf_counter()
 resultats_c_euler = euler_explicite(c, u, v, domaine, dx, dy, dt, nombre_pas, instants_affichage)
+fin = time.perf_counter()
+print(f"Temps de calcul Euler : {fin - debut:.3f} s")
+print(f"Taille du domaine : {domaine.shape}")
+print(f"Nombre de pas : {nombre_pas}")
 print("C'est l'affichage euler")
 afficher_concentrations_euler(resultats_c_euler, domaine, dt, instants_affichage)
 
@@ -96,3 +101,4 @@ resultats_c_kutta = runge_kutta(c, u, v, domaine, dx, dy, dt, nombre_pas, instan
 print("C'est l'affichage runge kutta")
 afficher_concentrations_kutta(resultats_c_kutta, domaine, dt, instants_affichage)
 """
+

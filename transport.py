@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 # Calculs flux par reconstruction constante 
-
+"""
 def calcul_flux(c, u, v, domaine):
 
     flux_u = np.zeros_like(u, dtype=float)
@@ -14,11 +14,11 @@ def calcul_flux(c, u, v, domaine):
         for j in range(1,c.shape[1]-1):
 
             if domaine[i,j] == 1 or domaine[i,j] == 2:
-                """
+                
                 # Cas 2 : chemin horizontal
                 if domaine[i,j-1] == 0 and domaine[i,j] == 2:  
                     c[i,j-1] = 1  #condition limite faible
-                """
+                
                 # Ecoulement vers la droite
                 if u[i,j] > 0:
                     flux_u[i,j] = u[i,j] * c[i,j-1]
@@ -47,9 +47,76 @@ def calcul_flux(c, u, v, domaine):
                     flux_v[i,j] = v[i,j] * c[i+1,j]
 
     return flux_u, flux_v
+"""
+def calcul_flux(c, u, v, domaine):
 
+    flux_u = np.zeros_like(u, dtype=float)
+    flux_v = np.zeros_like(v, dtype=float)
 
+    # On ne traite que les cellules intérieures au tableau
+    zone = np.s_[1:-1, 1:-1]
 
+    # Cellules appartenant au domaine de calcul
+    interieur = (domaine[zone] == 1) | (domaine[zone] == 2)
+
+    # =====================================================
+    # 1. Flux horizontaux
+    # =====================================================
+
+    u_int = u[zone]
+
+    # Valeurs de concentration de part et d'autre des faces
+    c_gauche = c[1:-1, :-2]
+    c_cellule = c[zone]
+
+    # Reconstruction constante : on prend la valeur amont
+    concentration_face = np.where(
+        u_int > 0,
+        c_gauche,
+        c_cellule
+    )
+
+    flux_horizontal = u_int * concentration_face
+
+    # Flux nul en dehors du domaine de calcul
+    flux_u[zone] = np.where(interieur, flux_horizontal, 0.0)
+
+    # =====================================================
+    # 2. Flux verticaux
+    # =====================================================
+
+    # Condition à l'entrée verticale, comme dans ton code actuel
+    entree_verticale = (
+        (domaine[:-2, 1:-1] == 0)
+        & (domaine[1:-1, 1:-1] == 2)
+    )
+
+    # Attention : cette instruction conserve le comportement
+    # de ton code initial, qui modifie c pendant le calcul des flux.
+    c_int = c[zone]
+    c_int[entree_verticale] = 1.0
+
+    v_int = v[zone]
+
+    # Valeurs de concentration de part et d'autre des faces
+    c_cellule = c[zone]
+    c_bas = c[2:, 1:-1]
+
+    # Reconstruction constante : on prend la valeur amont
+    concentration_face = np.where(
+        v_int > 0,
+        c_cellule,
+        c_bas
+    )
+
+    flux_vertical = v_int * concentration_face
+
+    # Flux nul en dehors du domaine de calcul
+    flux_v[zone] = np.where(interieur, flux_vertical, 0.0)
+
+    return flux_u, flux_v
+
+"""
 def dc_dt_cst(c, u, v, domaine, dx, dy):
 
     flux_u, flux_v = calcul_flux(c, u, v, domaine)
@@ -71,7 +138,41 @@ def dc_dt_cst(c, u, v, domaine, dx, dy):
                 dc_dt[i,j] = -(flux_x / dx + flux_y / dy)
 
     return dc_dt
+"""
 
+def dc_dt_cst(c, u, v, domaine, dx, dy):
+
+    flux_u, flux_v = calcul_flux(c, u, v, domaine)
+
+    dc_dt = np.zeros_like(c, dtype=float)
+
+    # Domaine intérieur du tableau
+    zone = np.s_[1:-1, 1:-1]
+
+    # Divergence des flux horizontaux
+    flux_x = (
+        flux_u[1:-1, 2:] - flux_u[1:-1, 1:-1]
+    ) / dx
+
+    # Divergence des flux verticaux
+    flux_y = (
+        flux_v[1:-1, 1:-1] - flux_v[:-2, 1:-1]
+    ) / dy
+
+    # Cellules appartenant au domaine de calcul
+    interieur = (
+        (domaine[zone] == 1)
+        | (domaine[zone] == 2)
+    )
+
+    # Équation de conservation
+    dc_dt[zone] = np.where(
+        interieur,
+        -(flux_x + flux_y),
+        0.0
+    )
+
+    return dc_dt
 
 def euler_explicite(c, u, v, domaine, dx, dy, dt, nombre_pas, instants_affichage):
     resultats_c_euler = {0: c.copy()}
