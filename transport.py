@@ -15,6 +15,10 @@ def calcul_flux(c, u, v, domaine):
 
             if domaine[i,j] == 1 or domaine[i,j] == 2:
 
+                # Cas 2 : chemin horizontal
+                if domaine[i,j-1] == 0 and domaine[i,j] == 2:  
+                    c[i,j-1] = 1  #condition limite faible
+
                 # Ecoulement vers la droite
                 if u[i,j] > 0:
                     flux_u[i,j] = u[i,j] * c[i,j-1]
@@ -30,8 +34,9 @@ def calcul_flux(c, u, v, domaine):
 
             if domaine[i,j] == 1 or domaine[i,j] == 2:
 
-                if domaine[i-1,j] == 0 and domaine[i,j] == 2:
-                    c[i,j] = 1  #condition limite faible
+                # Cas 1 : chemin vertical + général
+                #if domaine[i-1,j] == 0 and domaine[i,j] == 2:
+                    #c[i,j] = 1  #condition limite faible
 
                 # Ecoulement vers le bas
                 if v[i,j] > 0:

@@ -8,17 +8,39 @@ from divergence import verification_divergence
 from transport import euler_explicite, afficher_concentrations_euler
 from transport_linéaire import runge_kutta, afficher_concentrations_kutta
 
-mini_labyrinthe = np.zeros ((5,5))
-mini_labyrinthe[:,1]=1
+# ============================================================
+# 0. MATRICE DU LABYRINTHE
+# ============================================================
 
+# CAS 1 : CHEMIN VERTICAL
+# mini_labyrinthe = np.zeros((5, 5))
+# mini_labyrinthe[:, 1] = 1
+
+# CAS 2 : CHEMIN HORIZONTAL
+mini_labyrinthe = np.zeros((5, 5))
+mini_labyrinthe[:, 1] = 1
+mini_labyrinthe = mini_labyrinthe.T
+
+print("Matrice du labyrinthe :")
 print(mini_labyrinthe)
+
+domaine = np.zeros((7, 7), dtype=int)
+domaine[2, 1:6] = 1
+domaine[2, 1] = 2  # Entrée à gauche
+domaine[2, 5] = 2  # Sortie à droite
+
+print("Domaine :")
+print(domaine)
 
 # ============================================================
 # 1. CALCUL DU POTENTIEL
 # ============================================================
 
+#Cas général
 #domaine, potentiel = compute('laby complexe.png', 'out')
-domaine, potentiel = compute_matrice(mini_labyrinthe)
+
+# Cas 1 : chemin vertical
+# domaine, potentiel = compute_matrice(mini_labyrinthe)
 
 # ============================================================
 # 2. PARAMÈTRES
@@ -28,27 +50,28 @@ dx = 1
 dy = 1
 Cr = 1
 
-u = np.zeros_like(potentiel)
-u [:,2]=1
-u [0,:]=0
-u [-1,:]=0
-u [:,0]=0
-u [:,-1]=0
-print (u)
-v = np.zeros_like(potentiel)
-v [:,2]=1
-v [0,:]=0
-v [-1,:]=0
-v [:,0]=0
-v [:,-1]=0
-print (v)
+# CAS 1 : CHEMIN VERTICAL
+# u = np.zeros_like(domaine, dtype=float)
+# v = np.zeros_like(domaine, dtype=float)
+# v[1:6, 2] = 1
+
+# CAS 2 : CHEMIN HORIZONTAL
+u = np.zeros_like(domaine, dtype=float)
+v = np.zeros_like(domaine, dtype=float)
+u[2, 1:7] = 1
+
+print("Matrice u :")
+print(u)
+print("Matrice v :")
+print(v)
+
+# Cas général
 #u, v = calculer_vitesses(potentiel, domaine, dx, dy)
+
 vitesse_max = max(np.max(np.abs(u)), np.max(np.abs(v)))
-
 dt = Cr * dx / vitesse_max 
-
-nombre_pas = 10
-instants_affichage = [2, 4]
+nombre_pas = 5
+instants_affichage = [2, 3]
 
 
 # ============================================================
@@ -67,7 +90,7 @@ divergence = verification_divergence(u, v, domaine, dx, dy)
 # 4. INITIALISATION DE LA CONCENTRATION
 # ============================================================
 
-c = np.zeros_like(potentiel, dtype=float)
+c = np.zeros_like(domaine, dtype=float)
 
 # ============================================================
 # 5. EULER EXPLICITE + RECONSTRUCTION CONSTANTE
