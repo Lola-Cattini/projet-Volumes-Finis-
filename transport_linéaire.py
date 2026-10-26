@@ -44,6 +44,26 @@ def calcul_gradients_lineaires(c, domaine, dx, dy):
     return dc_dx, dc_dy
 """
 
+def limiteur_MC(gauche, centre, droite):
+    """
+    Limiteur de pente MC.
+    Réduit les oscillations près des variations brusques
+    tout en conservant une reconstruction linéaire.
+    """
+
+    return np.where(
+        gauche * droite > 0,
+        np.sign(centre) * np.minimum(
+            np.abs(centre),
+            np.minimum(
+                2 * np.abs(gauche),
+                2 * np.abs(droite)
+            )
+        ),
+        0.0
+    )
+
+
 def calcul_gradients_lineaires(c, domaine, dx, dy):
 
     dc_dx = np.zeros_like(c, dtype=float)
@@ -63,11 +83,32 @@ def calcul_gradients_lineaires(c, domaine, dx, dy):
 
     masque_x = fluide & voisins_x
 
-    gradient_x = (
+    # Gradients entre les mailles voisines
+    gradient_gauche_x = (
+        c[1:-1, 1:-1] - c[1:-1, :-2]
+    ) / dx
+
+    gradient_droite_x = (
+        c[1:-1, 2:] - c[1:-1, 1:-1]
+    ) / dx
+
+    # Gradient centré, comme dans ta méthode initiale
+    gradient_centre_x = (
         c[1:-1, 2:] - c[1:-1, :-2]
     ) / (2 * dx)
 
-    dc_dx[1:-1, 1:-1] = np.where(masque_x, gradient_x, 0.0)
+    # Limitation de la pente
+    gradient_x = limiteur_MC(
+        gradient_gauche_x,
+        gradient_centre_x,
+        gradient_droite_x
+    )
+
+    dc_dx[1:-1, 1:-1] = np.where(
+        masque_x,
+        gradient_x,
+        0.0
+    )
 
     # ------------------------------------------------
     # Gradient selon y
@@ -79,13 +120,39 @@ def calcul_gradients_lineaires(c, domaine, dx, dy):
         & (domaine[2:, 1:-1] != 0)
     )
 
-    masque_y = fluide & voisins_y
+    sorties = (
+        (domaine[1:-1, 1:-1] == 2)
+        & (domaine[2:, 1:-1] == 0)
+    )
 
-    gradient_y = (
+    masque_y = fluide & (voisins_y | sorties)
+
+    # Gradients entre les mailles voisines
+    gradient_haut_y = (
+        c[1:-1, 1:-1] - c[:-2, 1:-1]
+    ) / dy
+
+    gradient_bas_y = (
+        c[2:, 1:-1] - c[1:-1, 1:-1]
+    ) / dy
+
+    # Gradient centré, comme dans ta méthode initiale
+    gradient_centre_y = (
         c[2:, 1:-1] - c[:-2, 1:-1]
     ) / (2 * dy)
 
-    dc_dy[1:-1, 1:-1] = np.where(masque_y, gradient_y, 0.0)
+    # Limitation de la pente
+    gradient_y = limiteur_MC(
+        gradient_haut_y,
+        gradient_centre_y,
+        gradient_bas_y
+    )
+
+    dc_dy[1:-1, 1:-1] = np.where(
+        masque_y,
+        gradient_y,
+        0.0
+    )
 
     return dc_dx, dc_dy
 
@@ -257,6 +324,25 @@ def calcul_flux_lineaire(c, u, v, domaine, dx, dy):
 
     # Flux uniquement entre deux cellules du chemin
     flux_v[zone] = np.where(faces_y_valides, flux_y, 0.0)
+
+    # --------------------------------------------------------
+    # Prise en compte du flux sortant par le bas du domaine
+    # --------------------------------------------------------
+
+    sorties = (
+        (domaine[1:-1, 1:-1] == 2)
+        & (domaine[2:, 1:-1] == 0)
+    )
+
+    indices_sorties = np.argwhere(sorties)
+
+    for i_local, j_local in indices_sorties:
+        i = i_local + 1
+        j = j_local + 1
+
+        # Flux sortant uniquement si la vitesse est dirigée vers le bas
+        flux_v[i + 1, j] = max(v[i, j], 0.0) * c[i, j]
+
     return flux_u, flux_v
     
 """
@@ -338,18 +424,9 @@ def runge_kutta(c, u, v, domaine, dx, dy, dt, nombre_pas, instants_affichage):
 
         c = (c_1 + c_2) / 2
 
+
         # Condition à l'entrée au début du pas de temps
         c[entrees[:, 0], entrees[:, 1]] = 1.0
-
-        if np.max(c) > 1.001:
-            i_max, j_max = np.unravel_index(np.argmax(c), c.shape)
-
-            print(f"Pas de temps : {n}")
-            print(f"Cellule problématique : ({i_max}, {j_max})")
-            print(f"Concentration : {c[i_max, j_max]}")
-            print(f"Valeur du domaine : {domaine[i_max, j_max]}")
-
-            break
 
         if n in instants_affichage:
             resultats_c_kutta[n] = c.copy()
