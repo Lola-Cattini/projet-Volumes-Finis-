@@ -53,10 +53,8 @@ def calcul_flux(c, u, v, domaine):
     flux_u = np.zeros_like(u, dtype=float)
     flux_v = np.zeros_like(v, dtype=float)
 
-    # On ne traite que les cellules intérieures au tableau
     zone = np.s_[1:-1, 1:-1]
 
-    # Cellules appartenant au domaine de calcul
     interieur = (domaine[zone] == 1) | (domaine[zone] == 2)
 
     # =====================================================
@@ -78,7 +76,6 @@ def calcul_flux(c, u, v, domaine):
 
     flux_horizontal = u_int * concentration_face
 
-    # Flux nul en dehors du domaine de calcul
     flux_u[zone] = np.where(interieur, flux_horizontal, 0.0)
 
     # =====================================================
@@ -91,8 +88,6 @@ def calcul_flux(c, u, v, domaine):
         & (domaine[1:-1, 1:-1] == 2)
     )
 
-    # Attention : cette instruction conserve le comportement
-    # de ton code initial, qui modifie c pendant le calcul des flux.
     c_int = c[zone]
     c_int[entree_verticale] = 1.0
 

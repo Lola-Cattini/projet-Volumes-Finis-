@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import time
 from laplace_only import compute
+from laplace_only import compute_matrice
 from vitesses import calculer_vitesses, afficher_champs_vitesse
 from divergence import verification_divergence
 from transport import euler_explicite, afficher_concentrations_euler
@@ -12,12 +13,12 @@ from transport_linéaire import runge_kutta, afficher_concentrations_kutta
 # 1. CALCUL DU POTENTIEL
 # ============================================================
 
-"""
+
 # CAS 1 : CHEMIN VERTICAL
 mini_labyrinthe = np.zeros((5, 5))
 mini_labyrinthe[:, 1] = 1
 domaine, potentiel = compute_matrice(mini_labyrinthe)
-"""
+
 
 """
 # CAS 2 : CHEMIN HORIZONTAL
@@ -36,10 +37,10 @@ domaine[2, 5] = 2  # Sortie à droite
 print("Domaine :")
 print(domaine)
 """
-
+"""
 #Cas général
 domaine, potentiel = compute('laby.jpg', 'out')
-
+"""
 
 # ============================================================
 # 2. PARAMÈTRES
@@ -48,19 +49,19 @@ domaine, potentiel = compute('laby.jpg', 'out')
 dx = 1
 dy = 1
 Cr = 1
-nombre_pas = 10000
-instants_affichage = [1000, 10000]
+nombre_pas = 5
+instants_affichage = [2, 5]
 
 
 # ============================================================
 # 3. CALCUL DES VITESSES
 # ============================================================
-"""
+
 # CAS 1 : CHEMIN VERTICAL
 u = np.zeros_like(domaine, dtype=float)
 v = np.zeros_like(domaine, dtype=float)
 v[1:6, 2] = 1
-"""
+
 
 """
 # CAS 2 : CHEMIN HORIZONTAL
@@ -68,16 +69,16 @@ u = np.zeros_like(domaine, dtype=float)
 v = np.zeros_like(domaine, dtype=float)
 u[2, 1:7] = 1
 """
-
+"""
 # Cas général
 u, v = calculer_vitesses(potentiel, domaine, dx, dy)
 afficher_champs_vitesse(u, v, domaine)
 divergence = verification_divergence(u, v, domaine, dx, dy)
-
+"""
 vitesse_max = max(np.max(np.abs(u)), np.max(np.abs(v)))
 dt = Cr * dx / vitesse_max 
 
-
+"""
 # ============================================================
 # 5. EULER EXPLICITE + RECONSTRUCTION CONSTANTE
 # ============================================================
@@ -90,9 +91,9 @@ print(f"Taille du domaine : {domaine.shape}")
 print(f"Nombre de pas : {nombre_pas}")
 print("C'est l'affichage euler")
 afficher_concentrations_euler(resultats_c_euler, domaine, dt, instants_affichage)
-
-
 """
+
+
 # ============================================================
 # 6. RUNGE-KUTTA + RECONSTRUCTION LINEAIRE
 # ============================================================
@@ -100,5 +101,5 @@ c = np.zeros_like(domaine, dtype=float)
 resultats_c_kutta = runge_kutta(c, u, v, domaine, dx, dy, dt, nombre_pas, instants_affichage)
 print("C'est l'affichage runge kutta")
 afficher_concentrations_kutta(resultats_c_kutta, domaine, dt, instants_affichage)
-"""
+
 
