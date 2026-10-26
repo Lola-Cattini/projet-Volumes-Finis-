@@ -49,82 +49,43 @@ def calcul_gradients_lineaires(c, domaine, dx, dy):
     dc_dx = np.zeros_like(c, dtype=float)
     dc_dy = np.zeros_like(c, dtype=float)
 
-    # Zone intérieure du domaine
     fluide = domaine[1:-1, 1:-1] != 0
 
-    # ========================================================
-    # 1. Gradient limité selon x
-    # ========================================================
+    # ------------------------------------------------
+    # Gradient selon x
+    # ------------------------------------------------
 
-    c_gauche = c[1:-1, :-2]
-    c_centre = c[1:-1, 1:-1]
-    c_droite = c[1:-1, 2:]
-
-    # Pentes entre les cellules voisines
-    pente_gauche_x = (c_centre - c_gauche) / dx
-    pente_droite_x = (c_droite - c_centre) / dx
-
-    # Limiteur minmod
-    gradient_x = np.where(
-        pente_gauche_x * pente_droite_x > 0,
-        np.sign(pente_gauche_x)
-        * np.minimum(
-            np.abs(pente_gauche_x),
-            np.abs(pente_droite_x)
-        ),
-        0.0
-    )
-
-    # Vérifier que les cellules voisines appartiennent au fluide
-    voisins_x_valides = (
+    # Cellules fluides dont les deux voisins horizontaux sont fluides
+    voisins_x = (
         (domaine[1:-1, :-2] != 0)
         & (domaine[1:-1, 2:] != 0)
     )
 
-    masque_x = fluide & voisins_x_valides
+    masque_x = fluide & voisins_x
 
-    dc_dx[1:-1, 1:-1] = np.where(
-        masque_x,
-        gradient_x,
-        0.0
-    )
+    gradient_x = (
+        c[1:-1, 2:] - c[1:-1, :-2]
+    ) / (2 * dx)
 
-    # ========================================================
-    # 2. Gradient limité selon y
-    # ========================================================
+    dc_dx[1:-1, 1:-1] = np.where(masque_x, gradient_x, 0.0)
 
-    c_haut = c[:-2, 1:-1]
-    c_centre = c[1:-1, 1:-1]
-    c_bas = c[2:, 1:-1]
+    # ------------------------------------------------
+    # Gradient selon y
+    # ------------------------------------------------
 
-    # Pentes entre les cellules voisines
-    pente_haut_y = (c_centre - c_haut) / dy
-    pente_bas_y = (c_bas - c_centre) / dy
-
-    # Limiteur minmod
-    gradient_y = np.where(
-        pente_haut_y * pente_bas_y > 0,
-        np.sign(pente_haut_y)
-        * np.minimum(
-            np.abs(pente_haut_y),
-            np.abs(pente_bas_y)
-        ),
-        0.0
-    )
-
-    # Vérifier que les cellules voisines appartiennent au fluide
-    voisins_y_valides = (
+    # Cellules fluides dont les deux voisins verticaux sont fluides
+    voisins_y = (
         (domaine[:-2, 1:-1] != 0)
         & (domaine[2:, 1:-1] != 0)
     )
 
-    masque_y = fluide & voisins_y_valides
+    masque_y = fluide & voisins_y
 
-    dc_dy[1:-1, 1:-1] = np.where(
-        masque_y,
-        gradient_y,
-        0.0
-    )
+    gradient_y = (
+        c[2:, 1:-1] - c[:-2, 1:-1]
+    ) / (2 * dy)
+
+    dc_dy[1:-1, 1:-1] = np.where(masque_y, gradient_y, 0.0)
 
     return dc_dx, dc_dy
 
@@ -295,30 +256,9 @@ def calcul_flux_lineaire(c, u, v, domaine, dx, dy):
     )
 
     # Flux uniquement entre deux cellules du chemin
-    flux_v[zone] = np.where(
-        faces_y_valides,
-        flux_y,
-        0.0
-    )
-
-    # ========================================================
-    # 3. CONDITION À L'ENTRÉE VERTICALE
-    # ========================================================
-
-    entree = (
-        (domaine_haut == 0)
-        & (domaine_bas == 2)
-        & (v_int > 0)
-    )
-
-    # Reconstruction constante : c_face = 1
-    flux_v[zone] = np.where(
-        entree,
-        v_int,
-        flux_v[zone]
-    )
-
+    flux_v[zone] = np.where(faces_y_valides, flux_y, 0.0)
     return flux_u, flux_v
+    
 """
 def dc_dt_lineaire(c, u, v, domaine, dx, dy):
 
@@ -385,25 +325,31 @@ def runge_kutta(c, u, v, domaine, dx, dy, dt, nombre_pas, instants_affichage):
     instants_affichage = set(instants_affichage)
 
     entrees = np.argwhere(
-        (domaine[1:, :] == 2) & (domaine[:-1, :] == 0)
-    )
+    (domaine[1:, :] == 2) & (domaine[:-1, :] == 0))
     entrees[:, 0] += 1
 
+    c[entrees[:, 0], entrees[:, 1]] = 1.0
+
     for n in range(1, nombre_pas + 1):
-
-        print("Minimum :", np.min(c))
-        print("Maximum :", np.max(c))
-        print("Nombre de concentrations négatives :", np.sum(c < 0))
-        print("Nombre de concentrations supérieures à 1 :", np.sum(c > 1))
-
-        # Condition à l'entrée au début du pas de temps
-        c[entrees[:, 0], entrees[:, 1]] = 1.0
 
         c_1 = c + dt * dc_dt_lineaire(c, u, v, domaine, dx, dy)
 
         c_2 = c + dt * dc_dt_lineaire(c_1, u, v, domaine, dx, dy)
 
         c = (c_1 + c_2) / 2
+
+        # Condition à l'entrée au début du pas de temps
+        c[entrees[:, 0], entrees[:, 1]] = 1.0
+
+        if np.max(c) > 1.001:
+            i_max, j_max = np.unravel_index(np.argmax(c), c.shape)
+
+            print(f"Pas de temps : {n}")
+            print(f"Cellule problématique : ({i_max}, {j_max})")
+            print(f"Concentration : {c[i_max, j_max]}")
+            print(f"Valeur du domaine : {domaine[i_max, j_max]}")
+
+            break
 
         if n in instants_affichage:
             resultats_c_kutta[n] = c.copy()
@@ -434,3 +380,4 @@ def afficher_concentrations_kutta(resultats_c_kutta, domaine, dt, instants_affic
     fig.colorbar(image, ax=axes, label="Concentration c")
 
     plt.show()
+    
