@@ -48,9 +48,9 @@ domaine, potentiel = compute('laby.jpg', 'out')
 
 dx = 1
 dy = 1
-Cr = 1
-nombre_pas = 5
-instants_affichage = [2, 5]
+Cr = 0.1
+nombre_pas = 70
+instants_affichage = [5, 50]
 
 
 # ============================================================
@@ -87,8 +87,6 @@ debut = time.perf_counter()
 resultats_c_euler = euler_explicite(c, u, v, domaine, dx, dy, dt, nombre_pas, instants_affichage)
 fin = time.perf_counter()
 print(f"Temps de calcul Euler : {fin - debut:.3f} s")
-print(f"Taille du domaine : {domaine.shape}")
-print(f"Nombre de pas : {nombre_pas}")
 print("C'est l'affichage euler")
 afficher_concentrations_euler(resultats_c_euler, domaine, dt, instants_affichage)
 """
@@ -98,8 +96,12 @@ afficher_concentrations_euler(resultats_c_euler, domaine, dt, instants_affichage
 # 6. RUNGE-KUTTA + RECONSTRUCTION LINEAIRE
 # ============================================================
 c = np.zeros_like(domaine, dtype=float)
+debut = time.perf_counter()
 resultats_c_kutta = runge_kutta(c, u, v, domaine, dx, dy, dt, nombre_pas, instants_affichage)
+fin = time.perf_counter()
+print(f"Temps de calcul Runge-Kutta : {fin - debut:.3f} s")
 print("C'est l'affichage runge kutta")
 afficher_concentrations_kutta(resultats_c_kutta, domaine, dt, instants_affichage)
+
 
 

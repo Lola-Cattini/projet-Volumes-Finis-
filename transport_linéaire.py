@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 # ============================================================
 # 1. CALCUL DES GRADIENTS DE CONCENTRATION
 # ============================================================
-
+"""
 def calcul_gradients_lineaires(c, domaine, dx, dy):
 
     dc_dx = np.zeros_like(c, dtype=float)
@@ -23,11 +23,11 @@ def calcul_gradients_lineaires(c, domaine, dx, dy):
             # ------------------------------------------------
             # Gradient selon x
             # ------------------------------------------------
-            """
+            
             # CAS 2 : chemin horizontal
             if domaine[i, j-1] == 0 and domaine[i, j] == 2:
                 c[i,j]= 1.0
-            """            
+                        
             if domaine [i,j-1] != 0 and domaine [i,j+1] != 0:
                 dc_dx[i, j] = (c[i, j+1] - c[i, j-1]) / (2 * dx)
 
@@ -36,21 +36,102 @@ def calcul_gradients_lineaires(c, domaine, dx, dy):
             # Gradient selon y
             # ------------------------------------------------
 
-            # CAS 1 : chemin vertical + général
-            if domaine[i-1, j] == 0 and domaine[i, j] == 2:
-                c[i,j] = 1.0
 
 
             if domaine [i-1,j] != 0 and domaine [i+1,j] != 0:
                 dc_dy[i, j] = (c[i+1, j] - c[i-1, j]) / (2 * dy)
 
     return dc_dx, dc_dy
+"""
 
+def calcul_gradients_lineaires(c, domaine, dx, dy):
+
+    dc_dx = np.zeros_like(c, dtype=float)
+    dc_dy = np.zeros_like(c, dtype=float)
+
+    # Zone intérieure du domaine
+    fluide = domaine[1:-1, 1:-1] != 0
+
+    # ========================================================
+    # 1. Gradient limité selon x
+    # ========================================================
+
+    c_gauche = c[1:-1, :-2]
+    c_centre = c[1:-1, 1:-1]
+    c_droite = c[1:-1, 2:]
+
+    # Pentes entre les cellules voisines
+    pente_gauche_x = (c_centre - c_gauche) / dx
+    pente_droite_x = (c_droite - c_centre) / dx
+
+    # Limiteur minmod
+    gradient_x = np.where(
+        pente_gauche_x * pente_droite_x > 0,
+        np.sign(pente_gauche_x)
+        * np.minimum(
+            np.abs(pente_gauche_x),
+            np.abs(pente_droite_x)
+        ),
+        0.0
+    )
+
+    # Vérifier que les cellules voisines appartiennent au fluide
+    voisins_x_valides = (
+        (domaine[1:-1, :-2] != 0)
+        & (domaine[1:-1, 2:] != 0)
+    )
+
+    masque_x = fluide & voisins_x_valides
+
+    dc_dx[1:-1, 1:-1] = np.where(
+        masque_x,
+        gradient_x,
+        0.0
+    )
+
+    # ========================================================
+    # 2. Gradient limité selon y
+    # ========================================================
+
+    c_haut = c[:-2, 1:-1]
+    c_centre = c[1:-1, 1:-1]
+    c_bas = c[2:, 1:-1]
+
+    # Pentes entre les cellules voisines
+    pente_haut_y = (c_centre - c_haut) / dy
+    pente_bas_y = (c_bas - c_centre) / dy
+
+    # Limiteur minmod
+    gradient_y = np.where(
+        pente_haut_y * pente_bas_y > 0,
+        np.sign(pente_haut_y)
+        * np.minimum(
+            np.abs(pente_haut_y),
+            np.abs(pente_bas_y)
+        ),
+        0.0
+    )
+
+    # Vérifier que les cellules voisines appartiennent au fluide
+    voisins_y_valides = (
+        (domaine[:-2, 1:-1] != 0)
+        & (domaine[2:, 1:-1] != 0)
+    )
+
+    masque_y = fluide & voisins_y_valides
+
+    dc_dy[1:-1, 1:-1] = np.where(
+        masque_y,
+        gradient_y,
+        0.0
+    )
+
+    return dc_dx, dc_dy
 
 # ============================================================
 # 2. CALCUL DES FLUX PAR RECONSTRUCTION LINEAIRE
 # ============================================================
-
+"""
 def calcul_flux_lineaire(c, u, v, domaine, dx, dy):
 
     flux_u = np.zeros_like(u, dtype=float)
@@ -66,13 +147,13 @@ def calcul_flux_lineaire(c, u, v, domaine, dx, dy):
 
     for i in range(1,ny-1):
         for j in range(1, nx-1):
-            """
+            
             # Cas 2 : chemin horizontal
             if domaine [i,j-1] == 0 and domaine [i,j] == 2:
                 c_face = 1
                 flux_u[i, j] = u[i, j] * c_face
                 continue
-            """
+            
             # Écoulement vers la droite
             if u[i, j] > 0:
 
@@ -99,7 +180,7 @@ def calcul_flux_lineaire(c, u, v, domaine, dx, dy):
             # Cas 1 : chemin vertical + général
             if domaine [i-1,j] == 0 and domaine [i,j] == 2:
                 c_face = 1
-                flux_v[i, j] = u[i, j] * c_face
+                flux_v[i, j] = v[i, j] * c_face
                 continue
 
             # Écoulement vers le bas
@@ -118,7 +199,127 @@ def calcul_flux_lineaire(c, u, v, domaine, dx, dy):
                 flux_v[i, j] = 0
 
     return flux_u, flux_v
+"""
+def calcul_flux_lineaire(c, u, v, domaine, dx, dy):
 
+    flux_u = np.zeros_like(u, dtype=float)
+    flux_v = np.zeros_like(v, dtype=float)
+
+    dc_dx, dc_dy = calcul_gradients_lineaires(
+        c, domaine, dx, dy
+    )
+
+    zone = np.s_[1:-1, 1:-1]
+
+    # ========================================================
+    # 1. FLUX À TRAVERS LES FACES VERTICALES
+    # ========================================================
+
+    u_int = u[zone]
+
+    # Cellules situées à gauche et à droite de chaque face
+    domaine_gauche = domaine[1:-1, :-2]
+    domaine_droite = domaine[1:-1, 1:-1]
+
+    # Une face est autorisée uniquement si elle sépare
+    # deux cellules appartenant au chemin.
+    faces_x_valides = (
+        (domaine_gauche != 0)
+        & (domaine_droite != 0)
+    )
+
+    # Reconstruction linéaire à gauche de la face
+    c_face_droite = (
+        c[1:-1, :-2]
+        + dc_dx[1:-1, :-2] * dx / 2
+    )
+
+    # Reconstruction linéaire à droite de la face
+    c_face_gauche = (
+        c[1:-1, 1:-1]
+        - dc_dx[1:-1, 1:-1] * dx / 2
+    )
+
+    flux_x = np.where(
+        u_int > 0,
+        u_int * c_face_droite,
+        np.where(
+            u_int < 0,
+            u_int * c_face_gauche,
+            0.0
+        )
+    )
+
+    # Annuler les flux traversant les murs
+    flux_u[zone] = np.where(
+        faces_x_valides,
+        flux_x,
+        0.0
+    )
+
+    # ========================================================
+    # 2. FLUX À TRAVERS LES FACES HORIZONTALES
+    # ========================================================
+
+    v_int = v[zone]
+
+    # Cellules situées au-dessus et en dessous de chaque face
+    domaine_haut = domaine[:-2, 1:-1]
+    domaine_bas = domaine[1:-1, 1:-1]
+
+    faces_y_valides = (
+        (domaine_haut != 0)
+        & (domaine_bas != 0)
+    )
+
+    # Reconstruction linéaire au-dessus de la face
+    c_face_bas = (
+        c[:-2, 1:-1]
+        + dc_dy[:-2, 1:-1] * dy / 2
+    )
+
+    # Reconstruction linéaire en dessous de la face
+    c_face_haut = (
+        c[1:-1, 1:-1]
+        - dc_dy[1:-1, 1:-1] * dy / 2
+    )
+
+    flux_y = np.where(
+        v_int > 0,
+        v_int * c_face_bas,
+        np.where(
+            v_int < 0,
+            v_int * c_face_haut,
+            0.0
+        )
+    )
+
+    # Flux uniquement entre deux cellules du chemin
+    flux_v[zone] = np.where(
+        faces_y_valides,
+        flux_y,
+        0.0
+    )
+
+    # ========================================================
+    # 3. CONDITION À L'ENTRÉE VERTICALE
+    # ========================================================
+
+    entree = (
+        (domaine_haut == 0)
+        & (domaine_bas == 2)
+        & (v_int > 0)
+    )
+
+    # Reconstruction constante : c_face = 1
+    flux_v[zone] = np.where(
+        entree,
+        v_int,
+        flux_v[zone]
+    )
+
+    return flux_u, flux_v
+"""
 def dc_dt_lineaire(c, u, v, domaine, dx, dy):
 
     flux_u, flux_v = calcul_flux_lineaire(c, u, v, domaine, dx, dy)
@@ -134,22 +335,75 @@ def dc_dt_lineaire(c, u, v, domaine, dx, dy):
                 flux_x = (flux_u[i,j+1] - flux_u[i,j])
 
                 # Flux vertical :
-                flux_y = (flux_v[i,j] - flux_v[i-1,j])
+                flux_y = (flux_v[i+1,j] - flux_v[i,j])
 
                 # Conservation de la concentration
                 dc_dt[i,j] = -(flux_x / dx + flux_y / dy)
 
     return dc_dt
+"""
+
+def dc_dt_lineaire(c, u, v, domaine, dx, dy):
+
+    flux_u, flux_v = calcul_flux_lineaire(
+        c, u, v, domaine, dx, dy
+    )
+
+    dc_dt = np.zeros_like(c, dtype=float)
+
+    # Masque des cellules appartenant au chemin
+    masque = (
+        (domaine[1:-1, 1:-1] == 1)
+        | (domaine[1:-1, 1:-1] == 2)
+    )
+
+    # Divergence horizontale
+    flux_x = (
+        flux_u[1:-1, 2:]
+        - flux_u[1:-1, 1:-1]
+    ) / dx
+
+    # Divergence verticale
+    flux_y = (
+        flux_v[2:, 1:-1]
+        - flux_v[1:-1, 1:-1]
+    ) / dy
+
+    # Équation de transport
+    dc_dt[1:-1, 1:-1] = np.where(
+        masque,
+        -(flux_x + flux_y),
+        0.0
+    )
+
+    return dc_dt
 
 
-def runge_kutta (c, u, v, domaine, dx, dy, dt, nombre_pas, instants_affichage):
+def runge_kutta(c, u, v, domaine, dx, dy, dt, nombre_pas, instants_affichage):
+
     resultats_c_kutta = {0: c.copy()}
+    instants_affichage = set(instants_affichage)
+
+    entrees = np.argwhere(
+        (domaine[1:, :] == 2) & (domaine[:-1, :] == 0)
+    )
+    entrees[:, 0] += 1
 
     for n in range(1, nombre_pas + 1):
 
+        print("Minimum :", np.min(c))
+        print("Maximum :", np.max(c))
+        print("Nombre de concentrations négatives :", np.sum(c < 0))
+        print("Nombre de concentrations supérieures à 1 :", np.sum(c > 1))
+
+        # Condition à l'entrée au début du pas de temps
+        c[entrees[:, 0], entrees[:, 1]] = 1.0
+
         c_1 = c + dt * dc_dt_lineaire(c, u, v, domaine, dx, dy)
+
         c_2 = c + dt * dc_dt_lineaire(c_1, u, v, domaine, dx, dy)
-        c = (c_1 + c_2)/2
+
+        c = (c_1 + c_2) / 2
 
         if n in instants_affichage:
             resultats_c_kutta[n] = c.copy()
