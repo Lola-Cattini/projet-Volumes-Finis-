@@ -49,8 +49,8 @@ domaine, potentiel = compute('laby.jpg', 'out')
 dx = 1
 dy = 1
 Cr = 0.5
-nombre_pas = 10000
-instants_affichage = [5000, 10000]
+nombre_pas = 13000
+instants_affichage = [5000, 13000]
 
 
 # ============================================================
@@ -100,7 +100,7 @@ afficher_concentrations_euler(resultats_c_euler, domaine, dt, instants_affichage
 # ============================================================
 c = np.zeros_like(domaine, dtype=float)
 debut = time.perf_counter()
-resultats_c_kutta = runge_kutta(c, u, v, domaine, dx, dy, dt, nombre_pas, instants_affichage)
+resultats_c_kutta = runge_kutta(c.copy(), u, v, domaine, dx, dy, dt, nombre_pas, instants_affichage)
 fin = time.perf_counter()
 print(f"Temps de calcul Runge-Kutta : {fin - debut:.3f} s")
 print("C'est l'affichage runge kutta")

@@ -1,48 +1,287 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import time
+import numba
 
-
-
-def limiteur_MC(gauche, centre, droite):
+def preparer_masques(domaine):
     """
-    Limiteur de pente MC.
-    Réduit les oscillations près des variations brusques
-    tout en conservant une reconstruction linéaire.
+    Calcule une seule fois les masques géométriques
+    nécessaires aux calculs de gradients, de flux
+    et de transport.
     """
 
-    return np.where(
-        gauche * droite > 0,
-        np.sign(centre) * np.minimum(
-            np.abs(centre),
-            np.minimum(
-                2 * np.abs(gauche),
-                2 * np.abs(droite)
-            )
-        ),
-        0.0
-    )
+    # Cellules situées à l'intérieur du domaine
+    interieur = domaine[1:-1, 1:-1]
 
-
-def calcul_gradients_lineaires(c, domaine, dx, dy):
-
-    dc_dx = np.zeros_like(c, dtype=float)
-    dc_dy = np.zeros_like(c, dtype=float)
-
-    fluide = domaine[1:-1, 1:-1] != 0
+    # Cellules appartenant au chemin
+    fluide = interieur != 0
 
     # ------------------------------------------------
-    # Gradient selon x
+    # Masques pour le calcul des gradients
     # ------------------------------------------------
 
-    # Cellules fluides dont les deux voisins horizontaux sont fluides
     voisins_x = (
         (domaine[1:-1, :-2] != 0)
         & (domaine[1:-1, 2:] != 0)
     )
 
+    voisins_y = (
+        (domaine[:-2, 1:-1] != 0)
+        & (domaine[2:, 1:-1] != 0)
+    )
+
+    # Cellules de sortie par le bas
+    sorties = (
+        (interieur == 2)
+        & (domaine[2:, 1:-1] == 0)
+    )
+
     masque_x = fluide & voisins_x
 
-    # Gradients entre les mailles voisines
+    masque_y = fluide & (
+        voisins_y | sorties
+    )
+
+    # ------------------------------------------------
+    # Masques pour le calcul des flux
+    # ------------------------------------------------
+
+    faces_x_valides = (
+        (domaine[1:-1, :-2] != 0)
+        & (interieur != 0)
+    )
+
+    faces_y_valides = (
+        (domaine[:-2, 1:-1] != 0)
+        & (interieur != 0)
+    )
+
+    # ------------------------------------------------
+    # Masque des cellules où l'équation de transport
+    # doit être calculée
+    # ------------------------------------------------
+
+    masque_transport = (
+        (interieur == 1)
+        | (interieur == 2)
+    )
+
+    return {
+        "masque_x": masque_x,
+        "masque_y": masque_y,
+        "faces_x_valides": faces_x_valides,
+        "faces_y_valides": faces_y_valides,
+        "sorties": sorties,
+        "masque_transport": masque_transport
+    }
+
+@numba.njit(cache=True)
+def limiteur_MC_scalaire(gauche, centre, droite):
+    """Limiteur MC appliqué à une seule valeur."""
+
+    if gauche * droite > 0.0:
+        valeur = min(
+            abs(centre),
+            2.0 * abs(gauche),
+            2.0 * abs(droite)
+        )
+
+        if centre > 0.0:
+            return valeur
+        elif centre < 0.0:
+            return -valeur
+
+    return 0.0
+
+
+@numba.njit(cache=True)
+def calcul_gradients_numba(c, dx, dy, masque_x, masque_y):
+
+    ny, nx = c.shape
+
+    dc_dx = np.zeros((ny, nx), dtype=np.float64)
+    dc_dy = np.zeros((ny, nx), dtype=np.float64)
+
+    # Parcours des cellules intérieures
+    for i in range(1, ny - 1):
+        for j in range(1, nx - 1):
+
+            # ----------------------------------------
+            # Gradient selon x
+            # ----------------------------------------
+
+            if masque_x[i - 1, j - 1]:
+
+                gauche = (
+                    c[i, j] - c[i, j - 1]
+                ) / dx
+
+                centre = (
+                    c[i, j + 1] - c[i, j - 1]
+                ) / (2.0 * dx)
+
+                droite = (
+                    c[i, j + 1] - c[i, j]
+                ) / dx
+
+                dc_dx[i, j] = limiteur_MC_scalaire(
+                    gauche, centre, droite
+                )
+
+            # ----------------------------------------
+            # Gradient selon y
+            # ----------------------------------------
+
+            if masque_y[i - 1, j - 1]:
+
+                haut = (
+                    c[i, j] - c[i - 1, j]
+                ) / dy
+
+                centre = (
+                    c[i + 1, j] - c[i - 1, j]
+                ) / (2.0 * dy)
+
+                bas = (
+                    c[i + 1, j] - c[i, j]
+                ) / dy
+
+                dc_dy[i, j] = limiteur_MC_scalaire(
+                    haut, centre, bas
+                )
+
+    return dc_dx, dc_dy
+
+
+@numba.njit(cache=True)
+def dc_dt_numba(
+    c, u, v, dx, dy,
+    masque_x, masque_y,
+    faces_x_valides, faces_y_valides,
+    sorties, masque_transport
+):
+
+    ny, nx = c.shape
+
+    # Calcul des gradients
+    dc_dx, dc_dy = calcul_gradients_numba(
+        c, dx, dy, masque_x, masque_y
+    )
+
+    # Tableaux de flux
+    flux_u = np.zeros_like(u, dtype=np.float64)
+    flux_v = np.zeros_like(v, dtype=np.float64)
+
+    dc_dt = np.zeros_like(c, dtype=np.float64)
+
+    # =================================================
+    # 1. FLUX À TRAVERS LES FACES VERTICALES
+    # =================================================
+
+    for i in range(1, ny - 1):
+        for j in range(1, nx - 1):
+
+            if faces_x_valides[i - 1, j - 1]:
+
+                vitesse = u[i, j]
+
+                if vitesse > 0.0:
+                    concentration_face = (
+                        c[i, j - 1]
+                        + dc_dx[i, j - 1] * dx / 2.0
+                    )
+
+                elif vitesse < 0.0:
+                    concentration_face = (
+                        c[i, j]
+                        - dc_dx[i, j] * dx / 2.0
+                    )
+
+                else:
+                    concentration_face = 0.0
+
+                flux_u[i, j] = vitesse * concentration_face
+
+    # =================================================
+    # 2. FLUX À TRAVERS LES FACES HORIZONTALES
+    # =================================================
+
+    for i in range(1, ny - 1):
+        for j in range(1, nx - 1):
+
+            if faces_y_valides[i - 1, j - 1]:
+
+                vitesse = v[i, j]
+
+                if vitesse > 0.0:
+                    concentration_face = (
+                        c[i - 1, j]
+                        + dc_dy[i - 1, j] * dy / 2.0
+                    )
+
+                elif vitesse < 0.0:
+                    concentration_face = (
+                        c[i, j]
+                        - dc_dy[i, j] * dy / 2.0
+                    )
+
+                else:
+                    concentration_face = 0.0
+
+                flux_v[i, j] = vitesse * concentration_face
+
+    # =================================================
+    # 3. FLUX SORTANT PAR LE BAS
+    # =================================================
+
+    for i in range(1, ny - 1):
+        for j in range(1, nx - 1):
+
+            if sorties[i - 1, j - 1]:
+
+                vitesse = v[i, j]
+
+                if vitesse > 0.0:
+                    flux_v[i + 1, j] = vitesse * c[i, j]
+                else:
+                    flux_v[i + 1, j] = 0.0
+
+    # =================================================
+    # 4. DIVERGENCE ET ÉQUATION DE TRANSPORT
+    # =================================================
+
+    for i in range(1, ny - 1):
+        for j in range(1, nx - 1):
+
+            if masque_transport[i - 1, j - 1]:
+
+                divergence_x = (
+                    flux_u[i, j + 1] - flux_u[i, j]
+                ) / dx
+
+                divergence_y = (
+                    flux_v[i + 1, j] - flux_v[i, j]
+                ) / dy
+
+                dc_dt[i, j] = -(
+                    divergence_x + divergence_y
+                )
+
+    return dc_dt
+
+"""
+def calcul_gradients_lineaires(c, domaine, dx, dy, masques):
+
+    dc_dx = np.zeros_like(c, dtype=float)
+    dc_dy = np.zeros_like(c, dtype=float)
+
+    masque_x = masques["masque_x"]
+    masque_y = masques["masque_y"]
+
+    # ------------------------------------------------
+    # Gradient selon x
+    # ------------------------------------------------
+
     gradient_gauche_x = (
         c[1:-1, 1:-1] - c[1:-1, :-2]
     ) / dx
@@ -51,12 +290,10 @@ def calcul_gradients_lineaires(c, domaine, dx, dy):
         c[1:-1, 2:] - c[1:-1, 1:-1]
     ) / dx
 
-    # Gradient centré, comme dans ta méthode initiale
     gradient_centre_x = (
         c[1:-1, 2:] - c[1:-1, :-2]
     ) / (2 * dx)
 
-    # Limitation de la pente
     gradient_x = limiteur_MC(
         gradient_gauche_x,
         gradient_centre_x,
@@ -73,20 +310,6 @@ def calcul_gradients_lineaires(c, domaine, dx, dy):
     # Gradient selon y
     # ------------------------------------------------
 
-    # Cellules fluides dont les deux voisins verticaux sont fluides
-    voisins_y = (
-        (domaine[:-2, 1:-1] != 0)
-        & (domaine[2:, 1:-1] != 0)
-    )
-
-    sorties = (
-        (domaine[1:-1, 1:-1] == 2)
-        & (domaine[2:, 1:-1] == 0)
-    )
-
-    masque_y = fluide & (voisins_y | sorties)
-
-    # Gradients entre les mailles voisines
     gradient_haut_y = (
         c[1:-1, 1:-1] - c[:-2, 1:-1]
     ) / dy
@@ -95,12 +318,10 @@ def calcul_gradients_lineaires(c, domaine, dx, dy):
         c[2:, 1:-1] - c[1:-1, 1:-1]
     ) / dy
 
-    # Gradient centré, comme dans ta méthode initiale
     gradient_centre_y = (
         c[2:, 1:-1] - c[:-2, 1:-1]
     ) / (2 * dy)
 
-    # Limitation de la pente
     gradient_y = limiteur_MC(
         gradient_haut_y,
         gradient_centre_y,
@@ -116,13 +337,13 @@ def calcul_gradients_lineaires(c, domaine, dx, dy):
     return dc_dx, dc_dy
 
 
-def calcul_flux_lineaire(c, u, v, domaine, dx, dy):
+def calcul_flux_lineaire(c, u, v, domaine, dx, dy, masques):
 
     flux_u = np.zeros_like(u, dtype=float)
     flux_v = np.zeros_like(v, dtype=float)
 
     dc_dx, dc_dy = calcul_gradients_lineaires(
-        c, domaine, dx, dy
+        c, domaine, dx, dy, masques
     )
 
     zone = np.s_[1:-1, 1:-1]
@@ -132,17 +353,6 @@ def calcul_flux_lineaire(c, u, v, domaine, dx, dy):
     # ========================================================
 
     u_int = u[zone]
-
-    # Cellules situées à gauche et à droite de chaque face
-    domaine_gauche = domaine[1:-1, :-2]
-    domaine_droite = domaine[1:-1, 1:-1]
-
-    # Une face est autorisée uniquement si elle sépare
-    # deux cellules appartenant au chemin.
-    faces_x_valides = (
-        (domaine_gauche != 0)
-        & (domaine_droite != 0)
-    )
 
     # Reconstruction linéaire à gauche de la face
     c_face_droite = (
@@ -166,9 +376,8 @@ def calcul_flux_lineaire(c, u, v, domaine, dx, dy):
         )
     )
 
-    # Annuler les flux traversant les murs
     flux_u[zone] = np.where(
-        faces_x_valides,
+        masques["faces_x_valides"],
         flux_x,
         0.0
     )
@@ -178,15 +387,6 @@ def calcul_flux_lineaire(c, u, v, domaine, dx, dy):
     # ========================================================
 
     v_int = v[zone]
-
-    # Cellules situées au-dessus et en dessous de chaque face
-    domaine_haut = domaine[:-2, 1:-1]
-    domaine_bas = domaine[1:-1, 1:-1]
-
-    faces_y_valides = (
-        (domaine_haut != 0)
-        & (domaine_bas != 0)
-    )
 
     # Reconstruction linéaire au-dessus de la face
     c_face_bas = (
@@ -210,87 +410,99 @@ def calcul_flux_lineaire(c, u, v, domaine, dx, dy):
         )
     )
 
-    # Flux uniquement entre deux cellules du chemin
-    flux_v[zone] = np.where(faces_y_valides, flux_y, 0.0)
-
-    # --------------------------------------------------------
-    # Prise en compte du flux sortant par le bas du domaine
-    # --------------------------------------------------------
-
-    sorties = (
-        (domaine[1:-1, 1:-1] == 2)
-        & (domaine[2:, 1:-1] == 0)
+    flux_v[zone] = np.where(
+        masques["faces_y_valides"],
+        flux_y,
+        0.0
     )
 
-    indices_sorties = np.argwhere(sorties)
+    # ========================================================
+    # 3. FLUX SORTANT PAR LE BAS DU DOMAINE
+    # ========================================================
 
-    for i_local, j_local in indices_sorties:
-        i = i_local + 1
-        j = j_local + 1
+    sorties = masques["sorties"]
 
-        # Flux sortant uniquement si la vitesse est dirigée vers le bas
-        flux_v[i + 1, j] = max(v[i, j], 0.0) * c[i, j]
+    v_sorties = v[1:-1, 1:-1]
+    c_sorties = c[1:-1, 1:-1]
+
+    flux_sorties = (
+        np.maximum(v_sorties, 0.0)
+        * c_sorties
+    )
+
+    zone_flux = flux_v[2:, 1:-1]
+    zone_flux[sorties] = flux_sorties[sorties]
 
     return flux_u, flux_v
     
 
-def dc_dt_lineaire(c, u, v, domaine, dx, dy):
+def dc_dt_lineaire(c, u, v, domaine, dx, dy, masques):
 
-    flux_u, flux_v = calcul_flux_lineaire(c, u, v, domaine, dx, dy )
+    flux_u, flux_v = calcul_flux_lineaire(
+        c, u, v, domaine, dx, dy, masques
+    )
 
     dc_dt = np.zeros_like(c, dtype=float)
 
-    # Masque des cellules appartenant au chemin
-    masque = (
-        (domaine[1:-1, 1:-1] == 1)
-        | (domaine[1:-1, 1:-1] == 2)
-    )
-
+    # ------------------------------------------------
     # Divergence horizontale
+    # ------------------------------------------------
+
     flux_x = (
         flux_u[1:-1, 2:]
         - flux_u[1:-1, 1:-1]
     ) / dx
 
+    # ------------------------------------------------
     # Divergence verticale
+    # ------------------------------------------------
+
     flux_y = (
         flux_v[2:, 1:-1]
         - flux_v[1:-1, 1:-1]
     ) / dy
 
+    # ------------------------------------------------
     # Équation de transport
-    dc_dt[1:-1, 1:-1] = np.where(
-        masque,
-        -(flux_x + flux_y),
-        0.0
-    )
+    # ------------------------------------------------
+
+    dc_dt[1:-1, 1:-1] = np.where(masques["masque_transport"], -(flux_x + flux_y), 0.0)
 
     return dc_dt
-
+"""
 
 def runge_kutta(c, u, v, domaine, dx, dy, dt, nombre_pas, instants_affichage):
 
     resultats_c_kutta = {0: c.copy()}
     instants_affichage = set(instants_affichage)
 
-    entrees = np.argwhere(
-    (domaine[1:, :] == 2) & (domaine[:-1, :] == 0))
+    # Pré-calcul des masques une seule fois
+    masques = preparer_masques(domaine)
+    masque_x = masques["masque_x"]
+    masque_y = masques["masque_y"]
+
+    faces_x_valides = masques["faces_x_valides"]
+    faces_y_valides = masques["faces_y_valides"]
+
+    sorties = masques["sorties"]
+    masque_transport = masques["masque_transport"]
+
+    entrees = np.argwhere((domaine[1:, :] == 2) & (domaine[:-1, :] == 0))
     entrees[:, 0] += 1
 
     c[entrees[:, 0], entrees[:, 1]] = 1.0
 
+
     for n in range(1, nombre_pas + 1):
 
-        c_1 = c + dt * dc_dt_lineaire(c, u, v, domaine, dx, dy)
+        c_1 = c + dt * dc_dt_numba(c, u, v, dx, dy, masque_x, masque_y, faces_x_valides, faces_y_valides, sorties, masque_transport)
 
-        c_2 = c + dt * dc_dt_lineaire(c_1, u, v, domaine, dx, dy)
+        c_2 = c + dt * dc_dt_numba(c_1, u, v, dx, dy, masque_x, masque_y, faces_x_valides, faces_y_valides, sorties, masque_transport)
 
         c = (c_1 + c_2) / 2
 
-
         # Condition à l'entrée au début du pas de temps
         c[entrees[:, 0], entrees[:, 1]] = 1.0
-
         if n in instants_affichage:
             resultats_c_kutta[n] = c.copy()
 
