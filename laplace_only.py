@@ -1,10 +1,9 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.patches import Patch
 from scipy.sparse import csc_array as csr
 from scipy.sparse.linalg import spsolve, gmres, cg, splu
 from tqdm import tqdm
-
-
 import numpy as np
 
 
@@ -187,20 +186,60 @@ def compute(filepath:str, fileout:str = 'out'):
                             inside_value=1,
                             pot_in=100.,
                             pot_out=-100.)
+    
+    # --------------------------------------------------
+    # 1. Représentation du potentiel
+    # --------------------------------------------------
 
-    fig, ax = plt.subplots(1,1)
-    fig.set_size_inches(10,10)
-    ax.imshow(pot)
-    fig.savefig(fileout+'.png')
+    fig, ax = plt.subplots(figsize=(7, 6))
 
-    ax.imshow(domain)
-    fig.savefig('domain.png')
+    im = ax.imshow(pot, cmap="coolwarm", origin="upper")
 
-    np.savetxt(fileout+'_domain.txt', domain, fmt='%i')
-    np.savetxt(fileout+'_pot.txt', pot, fmt='%15.10f')
-    np.save(fileout+'_pot.npy', pot)
+    ax.set_title("Distribution du potentiel dans le labyrinthe")
+    ax.set_xlabel("Indice de colonne")
+    ax.set_ylabel("Indice de ligne")
+
+    cbar = fig.colorbar(im, ax=ax)
+    cbar.set_label("Potentiel")
+
+    fig.tight_layout()
+    fig.savefig(fileout + ".png", dpi=300, bbox_inches="tight")
+    plt.show()
+    plt.close(fig)
+
+    # --------------------------------------------------
+    # 2. Représentation du domaine
+    # --------------------------------------------------
+
+    fig, ax = plt.subplots(figsize=(7, 6))
+
+    im_domain = ax.imshow(domain, origin="upper")
+
+    # Titre et noms des axes
+    ax.set_title("Domaine du labyrinthe")
+    ax.set_xlabel("Indice de colonne")
+    ax.set_ylabel("Indice de ligne")
+
+    # Création d'une légende
+    couleurs = im_domain.cmap(im_domain.norm([0, 1, 2]))
+
+    legende = [
+        Patch(facecolor=couleurs[0], label="0 : Extérieur du domaine"),
+        Patch(facecolor=couleurs[1], label="1 : Chemin"),
+        Patch(facecolor=couleurs[2], label="2 : Entrée et sortie")
+    ]
+
+    ax.legend(handles=legende, loc="upper left",
+            bbox_to_anchor=(1.02, 1))
+
+    # Ajustement de la mise en page
+    fig.tight_layout()
+
+    # Enregistrement et affichage
+    fig.savefig("domain.png", dpi=300, bbox_inches="tight")
+    plt.show()
+    plt.close(fig)
 
     return domain, pot
-
 
 

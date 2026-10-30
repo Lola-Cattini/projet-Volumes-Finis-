@@ -5,8 +5,8 @@ def calculer_vitesses(potentiel, domaine, dx, dy):
     u = np.zeros_like(potentiel)
     v = np.zeros_like(potentiel)
 
-    for i in range(potentiel.shape[0]):
-        for j in range(1, potentiel.shape[1]):
+    for i in range(1, potentiel.shape[0]-1):
+        for j in range(1, potentiel.shape[1]-1):
             if domaine[i, j] == 1 or domaine[i, j] == 2:
                 if domaine[i, j-1] == 0:
                     u[i, j] = 0
@@ -18,8 +18,8 @@ def calculer_vitesses(potentiel, domaine, dx, dy):
                 else:
                     u[i, j] = 0.
 
-    for i in range(0, potentiel.shape[0]-1):
-        for j in range(potentiel.shape[1]):
+    for i in range(1, potentiel.shape[0]-1):
+        for j in range(1,potentiel.shape[1]-1):
             if domaine[i, j] == 1 or domaine[i, j] == 2:
                 if domaine[i+1, j] == 0:
                     v[i, j] = 0
