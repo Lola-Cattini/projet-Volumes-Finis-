@@ -1,13 +1,12 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import numba
+import matplotlib.colors as colors
+import matplotlib.cm as cm
 
 def preparer_masques(domaine):
 
-    # Cellules situées à l'intérieur du domaine
     interieur = domaine[1:-1, 1:-1]
-
-    # Cellules appartenant au chemin
     fluide = interieur != 0
 
     # ------------------------------------------------
@@ -15,13 +14,9 @@ def preparer_masques(domaine):
     # ------------------------------------------------
 
     voisins_x = ((domaine[1:-1, :-2] != 0) & (domaine[1:-1, 2:] != 0))
-
     voisins_y = ((domaine[:-2, 1:-1] != 0) & (domaine[2:, 1:-1] != 0))
-
     sorties = ((interieur == 2) & (domaine[2:, 1:-1] == 0))
-
     masque_x = fluide & voisins_x
-
     masque_y = fluide & (voisins_y | sorties)
 
     # ------------------------------------------------
@@ -29,8 +24,7 @@ def preparer_masques(domaine):
     # ------------------------------------------------
 
     faces_x_valides = ((domaine[1:-1, :-2] != 0) & (interieur != 0))
-
-    faces_y_valides = ((domaine[:-2, 1:-1] != 0) & (interieur != 0))
+    faces_y_valides = ((domaine[2:, 1:-1] != 0) & (interieur != 0))
 
     # ------------------------------------------------
     # Masque des cellules où l'équation de transport doit être calculée
@@ -47,10 +41,9 @@ def preparer_masques(domaine):
         "masque_transport": masque_transport
     }
 
+"""
 @numba.njit(cache=True)
 def limiteur_MC_scalaire(gauche, centre, droite):
-    """Limiteur MC appliqué à une seule valeur."""
-
     if gauche * droite > 0.0:
         valeur = min(abs(centre), 2.0 * abs(gauche), 2.0 * abs(droite))
 
@@ -60,17 +53,17 @@ def limiteur_MC_scalaire(gauche, centre, droite):
             return -valeur
 
     return 0.0
+    """
 
 
 @numba.njit(cache=True)
-def calcul_gradients_numba(c, dx, dy, masque_x, masque_y):
+def calcul_gradients(c, dx, dy, masque_x, masque_y):
 
     ny, nx = c.shape
 
     dc_dx = np.zeros((ny, nx), dtype=np.float64)
     dc_dy = np.zeros((ny, nx), dtype=np.float64)
 
-    # Parcours des cellules intérieures
     for i in range(1, ny - 1):
         for j in range(1, nx - 1):
 
@@ -79,43 +72,26 @@ def calcul_gradients_numba(c, dx, dy, masque_x, masque_y):
             # ----------------------------------------
 
             if masque_x[i - 1, j - 1]:
-
-                gauche = (c[i, j] - c[i, j - 1]) / dx
-
-                centre = (c[i, j + 1] - c[i, j - 1]) / (2.0 * dx)
-
-                droite = (c[i, j + 1] - c[i, j]) / dx
-
-                dc_dx[i, j] = limiteur_MC_scalaire(gauche, centre, droite)
+                dc_dx[i, j] = (c[i, j + 1] - c[i, j - 1]) / (2.0 * dx)
 
             # ----------------------------------------
             # Gradient selon y
             # ----------------------------------------
 
             if masque_y[i - 1, j - 1]:
+                dc_dy[i, j] = (c[i + 1, j] - c[i - 1, j]) / (2.0 * dy)
 
-                haut = (c[i, j] - c[i - 1, j]) / dy
-
-                centre = (c[i + 1, j] - c[i - 1, j]) / (2.0 * dy)
-
-                bas = (c[i + 1, j] - c[i, j]) / dy
-
-                dc_dy[i, j] = limiteur_MC_scalaire(haut, centre, bas)
 
     return dc_dx, dc_dy
 
 
 @numba.njit(cache=True)
-def dc_dt_numba(c, u, v, dx, dy, masque_x, masque_y, faces_x_valides, faces_y_valides, sorties, masque_transport):
+def calcul_flux_linéaire(c, u, v, dx, dy,dc_dx, dc_dy,faces_x_valides, faces_y_valides,sorties):
 
     ny, nx = c.shape
 
-    dc_dx, dc_dy = calcul_gradients_numba(c, dx, dy, masque_x, masque_y)
-
     flux_u = np.zeros_like(u, dtype=np.float64)
     flux_v = np.zeros_like(v, dtype=np.float64)
-
-    dc_dt = np.zeros_like(c, dtype=np.float64)
 
     # =================================================
     # 1. FLUX À TRAVERS LES FACES VERTICALES
@@ -125,14 +101,13 @@ def dc_dt_numba(c, u, v, dx, dy, masque_x, masque_y, faces_x_valides, faces_y_va
         for j in range(1, nx - 1):
 
             if faces_x_valides[i - 1, j - 1]:
-
                 vitesse = u[i, j]
 
                 if vitesse > 0.0:
-                    concentration_face = (c[i, j - 1]+ dc_dx[i, j - 1] * dx / 2.0)
+                    concentration_face = (c[i, j - 1] + dc_dx[i, j - 1] * dx / 2.0)
 
                 elif vitesse < 0.0:
-                    concentration_face = (c[i, j]- dc_dx[i, j] * dx / 2.0)
+                    concentration_face = (c[i, j] - dc_dx[i, j] * dx / 2.0)
 
                 else:
                     concentration_face = 0.0
@@ -147,14 +122,13 @@ def dc_dt_numba(c, u, v, dx, dy, masque_x, masque_y, faces_x_valides, faces_y_va
         for j in range(1, nx - 1):
 
             if faces_y_valides[i - 1, j - 1]:
-
                 vitesse = v[i, j]
 
                 if vitesse > 0.0:
-                    concentration_face = (c[i - 1, j]+ dc_dy[i - 1, j] * dy / 2.0)
+                    concentration_face = (c[i, j] + dc_dy[i, j] * dy / 2.0)
 
                 elif vitesse < 0.0:
-                    concentration_face = (c[i, j]- dc_dy[i, j] * dy / 2.0)
+                    concentration_face = (c[i+1, j] - dc_dy[i+1, j] * dy / 2.0)
 
                 else:
                     concentration_face = 0.0
@@ -169,26 +143,53 @@ def dc_dt_numba(c, u, v, dx, dy, masque_x, masque_y, faces_x_valides, faces_y_va
         for j in range(1, nx - 1):
 
             if sorties[i - 1, j - 1]:
-
                 vitesse = v[i, j]
 
                 if vitesse > 0.0:
-                    flux_v[i + 1, j] = vitesse * c[i, j]
+                    flux_v[i, j] = vitesse * c[i, j]
                 else:
-                    flux_v[i + 1, j] = 0.0
+                    flux_v[i, j] = 0.0
 
-    # =================================================
-    # 4. DIVERGENCE ET ÉQUATION DE TRANSPORT
-    # =================================================
+    return flux_u, flux_v
+
+@numba.njit(cache=True)
+def dc_dt_linéaire(
+    c, u, v, dx, dy,
+    masque_x, masque_y,
+    faces_x_valides, faces_y_valides,
+    sorties, masque_transport
+):
+
+    ny, nx = c.shape
+
+    # Calcul des gradients
+    dc_dx, dc_dy = calcul_gradients(
+        c, dx, dy, masque_x, masque_y
+    )
+
+    # Calcul des flux
+    flux_u, flux_v = calcul_flux_linéaire(
+        c, u, v, dx, dy,
+        dc_dx, dc_dy,
+        faces_x_valides, faces_y_valides,
+        sorties
+    )
+
+    # Calcul de la dérivée temporelle
+    dc_dt = np.zeros_like(c, dtype=np.float64)
 
     for i in range(1, ny - 1):
         for j in range(1, nx - 1):
 
             if masque_transport[i - 1, j - 1]:
 
-                divergence_x = (flux_u[i, j + 1] - flux_u[i, j]) / dx
+                divergence_x = (
+                    flux_u[i, j + 1] - flux_u[i, j]
+                ) / dx
 
-                divergence_y = (flux_v[i + 1, j] - flux_v[i, j]) / dy
+                divergence_y = (
+                    flux_v[i + 1, j] - flux_v[i, j]
+                ) / dy
 
                 dc_dt[i, j] = -(divergence_x + divergence_y)
 
@@ -200,7 +201,6 @@ def runge_kutta(c, u, v, domaine, dx, dy, dt, nombre_pas, instants_affichage):
     resultats_c_kutta = {0: c.copy()}
     instants_affichage = set(instants_affichage)
 
-    # Pré-calcul des masques une seule fois
     masques = preparer_masques(domaine)
     masque_x = masques["masque_x"]
     masque_y = masques["masque_y"]
@@ -218,14 +218,10 @@ def runge_kutta(c, u, v, domaine, dx, dy, dt, nombre_pas, instants_affichage):
 
 
     for n in range(1, nombre_pas + 1):
-
-        c_1 = c + dt * dc_dt_numba(c, u, v, dx, dy, masque_x, masque_y, faces_x_valides, faces_y_valides, sorties, masque_transport)
-
-        c_2 = c + dt * dc_dt_numba(c_1, u, v, dx, dy, masque_x, masque_y, faces_x_valides, faces_y_valides, sorties, masque_transport)
-
+        c_1 = c + dt * dc_dt_linéaire(c, u, v, dx, dy, masque_x, masque_y, faces_x_valides, faces_y_valides, sorties, masque_transport)
+        c_2 = c + dt * dc_dt_linéaire(c_1, u, v, dx, dy, masque_x, masque_y, faces_x_valides, faces_y_valides, sorties, masque_transport)
         c = (c_1 + c_2) / 2
 
-        # Condition à l'entrée au début du pas de temps
         c[entrees[:, 0], entrees[:, 1]] = 1.0
         if n in instants_affichage:
             resultats_c_kutta[n] = c.copy()
@@ -233,15 +229,41 @@ def runge_kutta(c, u, v, domaine, dx, dy, dt, nombre_pas, instants_affichage):
     return resultats_c_kutta
 
 
+
 def afficher_concentrations_kutta(resultats_c_kutta, domaine, dt, instants_affichage):
+
+    # Palette : bleu pour c < 0, viridis pour [0,1], rouge pour c > 1
+    cmap_viridis = plt.get_cmap("viridis", 256)
+    couleurs = np.vstack((
+        [0.0, 0.0, 1.0, 1.0],  # Bleu
+        cmap_viridis(np.linspace(0, 1, 256)),
+        [1.0, 0.0, 0.0, 1.0]   # Rouge
+    ))
+
+    cmap = colors.ListedColormap(couleurs)
+
+    # Définition des limites des classes
+    bornes = np.concatenate((
+        [-1e10, 0.0],
+        np.linspace(0.0, 1.0, 257)[1:],
+        [1e10]
+    ))
+
+    norm = colors.BoundaryNorm(bornes, cmap.N)
 
     fig, axes = plt.subplots(1, 2, figsize=(15, 5))
 
     for ax, n in zip(axes, instants_affichage):
+
         c_affichage = resultats_c_kutta[n]
         c_affichage = np.ma.masked_where(domaine == 0, c_affichage)
 
-        image = ax.imshow(c_affichage, origin='upper', cmap='viridis', vmin=0, vmax=1)
+        image = ax.imshow(
+            c_affichage,
+            origin='upper',
+            cmap=cmap,
+            norm=norm
+        )
 
         ax.set_title(f"t = {n * dt:.1f}")
         ax.set_xlabel("x")

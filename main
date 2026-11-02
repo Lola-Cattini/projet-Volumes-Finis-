@@ -49,8 +49,8 @@ domaine, potentiel = compute('laby.jpg', 'out')
 dx = 1
 dy = 1
 Cr = 0.5
-nombre_pas = 13000
-instants_affichage = [5000, 13000]
+nombre_pas = 7000
+instants_affichage = [5000, 7000]
 
 
 # ============================================================
