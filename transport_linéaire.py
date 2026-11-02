@@ -9,28 +9,20 @@ def preparer_masques(domaine):
     interieur = domaine[1:-1, 1:-1]
     fluide = interieur != 0
 
-    # ------------------------------------------------
-    # Masques pour le calcul des gradients
-    # ------------------------------------------------
+
+    sorties = ((interieur == 2) & (domaine[2:, 1:-1] == 0))
 
     voisins_x = ((domaine[1:-1, :-2] != 0) & (domaine[1:-1, 2:] != 0))
     voisins_y = ((domaine[:-2, 1:-1] != 0) & (domaine[2:, 1:-1] != 0))
-    sorties = ((interieur == 2) & (domaine[2:, 1:-1] == 0))
-    masque_x = fluide & voisins_x
-    masque_y = fluide & (voisins_y | sorties)
 
-    # ------------------------------------------------
-    # Masques pour le calcul des flux
-    # ------------------------------------------------
+    masque_x = fluide & voisins_x
+    masque_y = fluide & voisins_y
+
 
     faces_x_valides = ((domaine[1:-1, :-2] != 0) & (interieur != 0))
     faces_y_valides = ((domaine[2:, 1:-1] != 0) & (interieur != 0))
 
-    # ------------------------------------------------
-    # Masque des cellules où l'équation de transport doit être calculée
-    # ------------------------------------------------
 
-    masque_transport = ((interieur == 1) | (interieur == 2))
 
     return {
         "masque_x": masque_x,
@@ -38,23 +30,17 @@ def preparer_masques(domaine):
         "faces_x_valides": faces_x_valides,
         "faces_y_valides": faces_y_valides,
         "sorties": sorties,
-        "masque_transport": masque_transport
+        "fluide" : fluide
     }
-
 """
 @numba.njit(cache=True)
-def limiteur_MC_scalaire(gauche, centre, droite):
-    if gauche * droite > 0.0:
-        valeur = min(abs(centre), 2.0 * abs(gauche), 2.0 * abs(droite))
+def calcul_gradients(c, dx, dy, masque_x, masque_y):
 
-        if centre > 0.0:
-            return valeur
-        elif centre < 0.0:
-            return -valeur
+    dc_dx = np.zeros_like(c)
+    dc_dy = np.zeros_like(c)
 
-    return 0.0
-    """
-
+    return dc_dx, dc_dy
+"""
 
 @numba.njit(cache=True)
 def calcul_gradients(c, dx, dy, masque_x, masque_y):
@@ -135,61 +121,23 @@ def calcul_flux_linéaire(c, u, v, dx, dy,dc_dx, dc_dy,faces_x_valides, faces_y_
 
                 flux_v[i, j] = vitesse * concentration_face
 
-    # =================================================
-    # 3. FLUX SORTANT PAR LE BAS
-    # =================================================
-
-    for i in range(1, ny - 1):
-        for j in range(1, nx - 1):
-
-            if sorties[i - 1, j - 1]:
-                vitesse = v[i, j]
-
-                if vitesse > 0.0:
-                    flux_v[i, j] = vitesse * c[i, j]
-                else:
-                    flux_v[i, j] = 0.0
-
     return flux_u, flux_v
 
 @numba.njit(cache=True)
-def dc_dt_linéaire(
-    c, u, v, dx, dy,
-    masque_x, masque_y,
-    faces_x_valides, faces_y_valides,
-    sorties, masque_transport
-):
+def dc_dt_linéaire(c, u, v, dx, dy, masque_x, masque_y, faces_x_valides, faces_y_valides, sorties, fluide):
 
     ny, nx = c.shape
-
-    # Calcul des gradients
-    dc_dx, dc_dy = calcul_gradients(
-        c, dx, dy, masque_x, masque_y
-    )
-
-    # Calcul des flux
-    flux_u, flux_v = calcul_flux_linéaire(
-        c, u, v, dx, dy,
-        dc_dx, dc_dy,
-        faces_x_valides, faces_y_valides,
-        sorties
-    )
-
-    # Calcul de la dérivée temporelle
+    dc_dx, dc_dy = calcul_gradients(c, dx, dy, masque_x, masque_y)
+    flux_u, flux_v = calcul_flux_linéaire(c, u, v, dx, dy, dc_dx, dc_dy, faces_x_valides, faces_y_valides, sorties)
     dc_dt = np.zeros_like(c, dtype=np.float64)
 
     for i in range(1, ny - 1):
         for j in range(1, nx - 1):
 
-            if masque_transport[i - 1, j - 1]:
+            if fluide[i - 1, j - 1]:
+                divergence_x = (flux_u[i, j + 1] - flux_u[i, j]) / dx
 
-                divergence_x = (
-                    flux_u[i, j + 1] - flux_u[i, j]
-                ) / dx
-
-                divergence_y = (
-                    flux_v[i + 1, j] - flux_v[i, j]
-                ) / dy
+                divergence_y = (flux_v[i, j] - flux_v[i-1, j]) / dy
 
                 dc_dt[i, j] = -(divergence_x + divergence_y)
 
@@ -198,77 +146,109 @@ def dc_dt_linéaire(
 
 def runge_kutta(c, u, v, domaine, dx, dy, dt, nombre_pas, instants_affichage):
 
-    resultats_c_kutta = {0: c.copy()}
     instants_affichage = set(instants_affichage)
 
     masques = preparer_masques(domaine)
     masque_x = masques["masque_x"]
     masque_y = masques["masque_y"]
+    fluide = masques ["fluide"]
 
     faces_x_valides = masques["faces_x_valides"]
     faces_y_valides = masques["faces_y_valides"]
 
     sorties = masques["sorties"]
-    masque_transport = masques["masque_transport"]
-
+ 
     entrees = np.argwhere((domaine[1:, :] == 2) & (domaine[:-1, :] == 0))
     entrees[:, 0] += 1
 
     c[entrees[:, 0], entrees[:, 1]] = 1.0
+    resultats_c_kutta = {0: c.copy()}
 
 
     for n in range(1, nombre_pas + 1):
-        c_1 = c + dt * dc_dt_linéaire(c, u, v, dx, dy, masque_x, masque_y, faces_x_valides, faces_y_valides, sorties, masque_transport)
-        c_2 = c + dt * dc_dt_linéaire(c_1, u, v, dx, dy, masque_x, masque_y, faces_x_valides, faces_y_valides, sorties, masque_transport)
+        c_1 = c + dt * dc_dt_linéaire(c, u, v, dx, dy, masque_x, masque_y, faces_x_valides, faces_y_valides, sorties, fluide)
+        c_1[entrees[:, 0], entrees[:, 1]] = 1.0
+        c_2 = c + dt * dc_dt_linéaire(c_1, u, v, dx, dy, masque_x, masque_y, faces_x_valides, faces_y_valides, sorties, fluide)
         c = (c_1 + c_2) / 2
 
         c[entrees[:, 0], entrees[:, 1]] = 1.0
+
         if n in instants_affichage:
             resultats_c_kutta[n] = c.copy()
 
     return resultats_c_kutta
 
-
-
 def afficher_concentrations_kutta(resultats_c_kutta, domaine, dt, instants_affichage):
 
-    # Palette : bleu pour c < 0, viridis pour [0,1], rouge pour c > 1
-    cmap_viridis = plt.get_cmap("viridis", 256)
-    couleurs = np.vstack((
-        [0.0, 0.0, 1.0, 1.0],  # Bleu
-        cmap_viridis(np.linspace(0, 1, 256)),
-        [1.0, 0.0, 0.0, 1.0]   # Rouge
-    ))
+    # =================================================
+    # 1. Définition de la palette de couleurs
+    # =================================================
 
-    cmap = colors.ListedColormap(couleurs)
+    cmap = plt.get_cmap("viridis").copy()
 
-    # Définition des limites des classes
-    bornes = np.concatenate((
-        [-1e10, 0.0],
-        np.linspace(0.0, 1.0, 257)[1:],
-        [1e10]
-    ))
+    cmap.set_under("blue")   # c < -0.1
+    cmap.set_over("red")     # c > 1.1
 
-    norm = colors.BoundaryNorm(bornes, cmap.N)
+    vmin = -0.05
+    vmax = 1.05
 
-    fig, axes = plt.subplots(1, 2, figsize=(15, 5))
+    # =================================================
+    # 2. Création de la figure
+    # =================================================
+
+    fig = plt.figure(figsize=(15, 5), layout="constrained")
+
+    gs = fig.add_gridspec(1, 3, width_ratios=[1, 1, 0.05])
+
+    axes = [
+        fig.add_subplot(gs[0, 0]),
+        fig.add_subplot(gs[0, 1])
+    ]
+
+    cax = fig.add_subplot(gs[0, 2])
+
+    # Titre général commun aux deux graphiques
+    fig.suptitle(
+        "Résolution par Runge-Kutta et reconstruction linéaire",
+        fontsize=16
+    )
+
+    # =================================================
+    # 3. Affichage des concentrations
+    # =================================================
 
     for ax, n in zip(axes, instants_affichage):
 
         c_affichage = resultats_c_kutta[n]
+
+        # Masquer les cellules correspondant aux murs
         c_affichage = np.ma.masked_where(domaine == 0, c_affichage)
 
         image = ax.imshow(
             c_affichage,
-            origin='upper',
+            origin="upper",
             cmap=cmap,
-            norm=norm
+            vmin=vmin,
+            vmax=vmax
         )
 
-        ax.set_title(f"t = {n * dt:.1f}")
-        ax.set_xlabel("x")
-        ax.set_ylabel("y")
+        # Titre individuel
+        ax.set_title(f"Temps simulé : t = {n * dt:.1f} s")
 
-    fig.colorbar(image, ax=axes, label="Concentration c")
+        # Noms des axes
+        ax.set_xlabel("Indices des colonnes")
+        ax.set_ylabel("Indices des lignes")
 
+    # =================================================
+    # 4. Barre de couleur commune
+    # =================================================
+
+    fig.colorbar(
+        image,
+        cax=cax,
+        label="Concentration c",
+        extend="both"
+    )
+
+    plt.savefig("Résolution par Runge-Kutta et reconstruction linéaire.png", dpi=300, bbox_inches="tight")
     plt.show()

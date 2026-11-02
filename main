@@ -49,8 +49,8 @@ domaine, potentiel = compute('laby.jpg', 'out')
 dx = 1
 dy = 1
 Cr = 0.5
-nombre_pas = 7000
-instants_affichage = [5000, 7000]
+nombre_pas = 12000
+instants_affichage = [5000, 12000]
 
 
 # ============================================================
@@ -77,9 +77,6 @@ divergence = verification_divergence(u, v, domaine, dx, dy)
 vitesse_x_max = np.max(np.abs(u))
 vitesse_y_max = np.max(np.abs(v))
 dt = Cr / (vitesse_x_max / dx + vitesse_y_max / dy)
-print (vitesse_x_max)
-print (vitesse_y_max)
-print (dt)
 
 """
 # ============================================================
@@ -105,5 +102,3 @@ fin = time.perf_counter()
 print(f"Temps de calcul Runge-Kutta : {fin - debut:.3f} s")
 print("C'est l'affichage runge kutta")
 afficher_concentrations_kutta(resultats_c_kutta, domaine, dt, instants_affichage)
-
-
