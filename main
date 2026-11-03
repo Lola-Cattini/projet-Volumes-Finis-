@@ -39,8 +39,7 @@ print(domaine)
 """
 
 #Cas général
-domaine, potentiel = compute('laby.jpg', 'out')
-
+domaine, potentiel = compute('laby complexe.png', 'out')
 
 # ============================================================
 # 2. PARAMÈTRES
@@ -48,9 +47,9 @@ domaine, potentiel = compute('laby.jpg', 'out')
 
 dx = 1
 dy = 1
-Cr = 0.5
-nombre_pas = 12000
-instants_affichage = [5000, 12000]
+Cr = 0.9
+nombre_pas = 15000
+instants_affichage = [10000, 15000]
 
 
 # ============================================================
@@ -89,8 +88,8 @@ fin = time.perf_counter()
 print(f"Temps de calcul Euler : {fin - debut:.3f} s")
 print("C'est l'affichage euler")
 afficher_concentrations_euler(resultats_c_euler, domaine, dt, instants_affichage)
-"""
 
+"""
 
 # ============================================================
 # 6. RUNGE-KUTTA + RECONSTRUCTION LINEAIRE

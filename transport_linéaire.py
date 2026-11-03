@@ -1,16 +1,11 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import numba
-import matplotlib.colors as colors
-import matplotlib.cm as cm
 
 def preparer_masques(domaine):
 
     interieur = domaine[1:-1, 1:-1]
     fluide = interieur != 0
-
-
-    sorties = ((interieur == 2) & (domaine[2:, 1:-1] == 0))
 
     voisins_x = ((domaine[1:-1, :-2] != 0) & (domaine[1:-1, 2:] != 0))
     voisins_y = ((domaine[:-2, 1:-1] != 0) & (domaine[2:, 1:-1] != 0))
@@ -29,26 +24,17 @@ def preparer_masques(domaine):
         "masque_y": masque_y,
         "faces_x_valides": faces_x_valides,
         "faces_y_valides": faces_y_valides,
-        "sorties": sorties,
         "fluide" : fluide
     }
-"""
-@numba.njit(cache=True)
-def calcul_gradients(c, dx, dy, masque_x, masque_y):
 
-    dc_dx = np.zeros_like(c)
-    dc_dy = np.zeros_like(c)
-
-    return dc_dx, dc_dy
-"""
 
 @numba.njit(cache=True)
-def calcul_gradients(c, dx, dy, masque_x, masque_y):
+def calcul_gradients(c, dx, dy, masque_x, masque_y, dc_dx, dc_dy):
 
     ny, nx = c.shape
 
-    dc_dx = np.zeros((ny, nx), dtype=np.float64)
-    dc_dy = np.zeros((ny, nx), dtype=np.float64)
+    dc_dx.fill(0.0)
+    dc_dy.fill(0.0)
 
     for i in range(1, ny - 1):
         for j in range(1, nx - 1):
@@ -72,12 +58,12 @@ def calcul_gradients(c, dx, dy, masque_x, masque_y):
 
 
 @numba.njit(cache=True)
-def calcul_flux_linéaire(c, u, v, dx, dy,dc_dx, dc_dy,faces_x_valides, faces_y_valides,sorties):
+def calcul_flux_linéaire(c, u, v, dx, dy,dc_dx, dc_dy,faces_x_valides, faces_y_valides, flux_u, flux_v):
 
     ny, nx = c.shape
 
-    flux_u = np.zeros_like(u, dtype=np.float64)
-    flux_v = np.zeros_like(v, dtype=np.float64)
+    flux_u.fill(0.0)
+    flux_v.fill(0.0)
 
     # =================================================
     # 1. FLUX À TRAVERS LES FACES VERTICALES
@@ -124,12 +110,13 @@ def calcul_flux_linéaire(c, u, v, dx, dy,dc_dx, dc_dy,faces_x_valides, faces_y_
     return flux_u, flux_v
 
 @numba.njit(cache=True)
-def dc_dt_linéaire(c, u, v, dx, dy, masque_x, masque_y, faces_x_valides, faces_y_valides, sorties, fluide):
+def dc_dt_linéaire(c, u, v, dx, dy, masque_x, masque_y, faces_x_valides, faces_y_valides, fluide, dc_dx, dc_dy, flux_u, flux_v, dc_dt):
 
     ny, nx = c.shape
-    dc_dx, dc_dy = calcul_gradients(c, dx, dy, masque_x, masque_y)
-    flux_u, flux_v = calcul_flux_linéaire(c, u, v, dx, dy, dc_dx, dc_dy, faces_x_valides, faces_y_valides, sorties)
-    dc_dt = np.zeros_like(c, dtype=np.float64)
+    dc_dx, dc_dy = calcul_gradients(c, dx, dy, masque_x, masque_y, dc_dx, dc_dy)
+    flux_u, flux_v = calcul_flux_linéaire(c, u, v, dx, dy, dc_dx, dc_dy, faces_x_valides, faces_y_valides, flux_u, flux_v)
+
+    dc_dt.fill(0.0)
 
     for i in range(1, ny - 1):
         for j in range(1, nx - 1):
@@ -156,19 +143,29 @@ def runge_kutta(c, u, v, domaine, dx, dy, dt, nombre_pas, instants_affichage):
     faces_x_valides = masques["faces_x_valides"]
     faces_y_valides = masques["faces_y_valides"]
 
-    sorties = masques["sorties"]
+    ny, nx = c.shape
  
     entrees = np.argwhere((domaine[1:, :] == 2) & (domaine[:-1, :] == 0))
     entrees[:, 0] += 1
-
     c[entrees[:, 0], entrees[:, 1]] = 1.0
     resultats_c_kutta = {0: c.copy()}
 
+    # =================================================
+    # Matrices de travail créées une seule fois
+    # =================================================
+
+    dc_dx = np.zeros((ny, nx), dtype=np.float64)
+    dc_dy = np.zeros((ny, nx), dtype=np.float64)
+
+    flux_u = np.zeros_like(u, dtype=np.float64)
+    flux_v = np.zeros_like(v, dtype=np.float64)
+
+    dc_dt = np.zeros_like(c, dtype=np.float64)
 
     for n in range(1, nombre_pas + 1):
-        c_1 = c + dt * dc_dt_linéaire(c, u, v, dx, dy, masque_x, masque_y, faces_x_valides, faces_y_valides, sorties, fluide)
+        c_1 = c + dt * dc_dt_linéaire(c, u, v, dx, dy, masque_x, masque_y, faces_x_valides, faces_y_valides, fluide, dc_dx, dc_dy, flux_u, flux_v, dc_dt)
         c_1[entrees[:, 0], entrees[:, 1]] = 1.0
-        c_2 = c + dt * dc_dt_linéaire(c_1, u, v, dx, dy, masque_x, masque_y, faces_x_valides, faces_y_valides, sorties, fluide)
+        c_2 = c + dt * dc_dt_linéaire(c_1, u, v, dx, dy, masque_x, masque_y, faces_x_valides, faces_y_valides, fluide, dc_dx, dc_dy, flux_u, flux_v, dc_dt)
         c = (c_1 + c_2) / 2
 
         c[entrees[:, 0], entrees[:, 1]] = 1.0
