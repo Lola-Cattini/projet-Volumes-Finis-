@@ -31,6 +31,15 @@ def preparer_masques(domaine):
 @numba.njit(cache=True)
 def calcul_gradients(c, dx, dy, masque_x, masque_y, dc_dx, dc_dy):
 
+    dc_dx.fill(0.0)
+    dc_dy.fill(0.0)
+
+    return dc_dx, dc_dy
+
+"""
+@numba.njit(cache=True)
+def calcul_gradients(c, dx, dy, masque_x, masque_y, dc_dx, dc_dy):
+
     ny, nx = c.shape
 
     dc_dx.fill(0.0)
@@ -55,7 +64,7 @@ def calcul_gradients(c, dx, dy, masque_x, masque_y, dc_dx, dc_dy):
 
 
     return dc_dx, dc_dy
-
+"""
 
 @numba.njit(cache=True)
 def calcul_flux_linéaire(c, u, v, dx, dy,dc_dx, dc_dy,faces_x_valides, faces_y_valides, flux_u, flux_v):
@@ -131,7 +140,7 @@ def dc_dt_linéaire(c, u, v, dx, dy, masque_x, masque_y, faces_x_valides, faces_
     return dc_dt
 
 
-def runge_kutta(c, u, v, domaine, dx, dy, dt, nombre_pas, instants_affichage):
+def runge_kutta(c, u, v, domaine, dx, dy, dt, nombre_pas, instants_affichage, i, j):
 
     instants_affichage = set(instants_affichage)
 
@@ -149,6 +158,10 @@ def runge_kutta(c, u, v, domaine, dx, dy, dt, nombre_pas, instants_affichage):
     entrees[:, 0] += 1
     c[entrees[:, 0], entrees[:, 1]] = 1.0
     resultats_c_kutta = {0: c.copy()}
+
+    # Enregistrement de la concentration de la cellule
+    temps = [0.0]
+    concentrations = [c[i, j]]
 
     # =================================================
     # Matrices de travail créées une seule fois
@@ -170,10 +183,14 @@ def runge_kutta(c, u, v, domaine, dx, dy, dt, nombre_pas, instants_affichage):
 
         c[entrees[:, 0], entrees[:, 1]] = 1.0
 
+        # Enregistrement à chaque pas de temps
+        temps.append(n * dt)
+        concentrations.append(c[i, j])
+
         if n in instants_affichage:
             resultats_c_kutta[n] = c.copy()
 
-    return resultats_c_kutta
+    return resultats_c_kutta, temps, concentrations
 
 def afficher_concentrations_kutta(resultats_c_kutta, domaine, dt, instants_affichage):
 

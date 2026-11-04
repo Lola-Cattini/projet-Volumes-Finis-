@@ -61,19 +61,29 @@ def dc_dt_cst(c, u, v, domaine, dx, dy):
     return dc_dt
 
 
-def euler_explicite(c, u, v, domaine, dx, dy, dt, nombre_pas, instants_affichage):
-    
+def euler_explicite(c, u, v, domaine, dx, dy, dt, nombre_pas, instants_affichage, i, j):
+
     resultats_c_euler = {0: c.copy()}
-    
+
+
+    temps = [0.0]
+    concentrations = [c[i, j]]
+
+
     for n in range(1, nombre_pas + 1):
 
         c = c + dt * dc_dt_cst(c, u, v, domaine, dx, dy)
-    
+
+        # Enregistrement à chaque pas de temps
+        temps.append(n * dt)
+        concentrations.append(c[i, j])
+
+
         # On sauvegarde les résultats aux instants voulus
         if n in instants_affichage:
             resultats_c_euler[n] = c.copy()
 
-    return resultats_c_euler
+    return resultats_c_euler, temps, concentrations
 
 
 def afficher_concentrations_euler(resultats_c_euler, domaine, dt, instants_affichage):
