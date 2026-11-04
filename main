@@ -74,8 +74,8 @@ u[2, 1:7] = 1
 # Cas général
 u, v = calculer_vitesses(potentiel, domaine, dx, dy)
 afficher_champs_vitesse(u, v, domaine)
-divergence = verification_divergence(u, v, domaine, dx, dy)
 afficher_vitesses(u, v, domaine)
+divergence = verification_divergence(u, v, domaine, dx, dy)
 
 vitesse_x_max = np.max(np.abs(u))
 vitesse_y_max = np.max(np.abs(v))
