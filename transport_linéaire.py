@@ -27,7 +27,7 @@ def preparer_masques(domaine):
         "fluide" : fluide
     }
 
-
+"""
 @numba.njit(cache=True)
 def calcul_gradients(c, dx, dy, masque_x, masque_y, dc_dx, dc_dy):
 
@@ -35,8 +35,8 @@ def calcul_gradients(c, dx, dy, masque_x, masque_y, dc_dx, dc_dy):
     dc_dy.fill(0.0)
 
     return dc_dx, dc_dy
-
 """
+
 @numba.njit(cache=True)
 def calcul_gradients(c, dx, dy, masque_x, masque_y, dc_dx, dc_dy):
 
@@ -64,7 +64,7 @@ def calcul_gradients(c, dx, dy, masque_x, masque_y, dc_dx, dc_dy):
 
 
     return dc_dx, dc_dy
-"""
+
 
 @numba.njit(cache=True)
 def calcul_flux_linéaire(c, u, v, dx, dy,dc_dx, dc_dy,faces_x_valides, faces_y_valides, flux_u, flux_v):
